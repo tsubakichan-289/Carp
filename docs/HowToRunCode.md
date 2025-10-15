@@ -1,12 +1,12 @@
-# How to run code
+# コードの実行方法
 
-This document is aimed at people just starting out with Carp, in particular if you want to try out the [examples](../examples).
+このドキュメントは Carp を始めたばかりの方、特に[サンプル集](../examples)を試してみたい方向けのガイドです。
 
-## Prerequisites
+## 前提条件
 
-Make sure that you have [installed the Carp compiler and its dependencies](Install.md) and that you can start it without any error messages.
+まずは[Carp コンパイラと依存パッケージをインストール](Install.md)し、エラーメッセージなく起動できることを確認してください。
 
-Here's how it should look:
+期待する出力例は以下の通りです。
 
 ```text
 $ carp
@@ -16,43 +16,41 @@ Evaluate (help) for more information.
 鲤
 ```
 
-The `鲤` character on the last line is the [REPL](https://en.wikipedia.org/wiki/Read%E2%80%93eval%E2%80%93print_loop) prompt, it means that Carp is waiting for you to enter a command.
+最後の行に表示されている `鲤` は [REPL](https://en.wikipedia.org/wiki/Read%E2%80%93eval%E2%80%93print_loop) のプロンプトで、Carp が入力待ちであることを表します。
 
-## Running code from the REPL
+## REPL からコードを実行する
 
-You can load some code with:
+REPL では次のようにファイルをロードできます。
 
 ```bash
 鲤 (load "some_file.carp")
 ```
 
-The path to the file should be relative to where you started `carp` (or the file has to be in your [search-path](Libraries.md) path).
-It is also possible to paste a block of code (even multiple top-level expressions) into the REPL.
+ファイルパスは `carp` を起動したディレクトリからの相対パスで指定します（あるいは、そのファイルが[検索パス](Libraries.md)上に存在している必要があります）。複数のトップレベル式を含むコードをそのまま貼り付けても構いません。
 
-To build and run, first do:
+ビルドと実行はそれぞれ以下のコマンドで行います。
 
 ```bash
 鲤 (build)
 ```
 
-And then:
+続けて実行します。
 
 ```
 鲤 (run)
 ```
 
-## Running code from the terminal
+## 端末からコードを実行する
 
-If you don't want to work in the REPL and use a more classic "compile & run" setup, do this:
+REPL ではなく、従来の「コンパイルして実行する」フローで使いたい場合は次のようにします。
 
 ```bash
 $ carp some_file.carp -x
 ```
 
-Any files you list as arguments to `carp` will be loaded (this works when starting the REPL too).
-The `-x` flag means that you want to compile and run the code immedately, exiting afterwards.
+`carp` に引数として指定したファイルは起動時に読み込まれます（REPL を起動するときも同様です）。`-x` フラグは「コンパイルしてすぐ実行し、そのまま終了する」という意味です。
 
-If you just want to build the executable, use `-b` instead:
+実行ファイルを生成するだけでよい場合は `-b` を指定します。
 
 ```bash
 $ carp some_file.carp -b

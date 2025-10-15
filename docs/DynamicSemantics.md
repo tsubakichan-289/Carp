@@ -1,13 +1,13 @@
-# Dynamic Semantics
+# 動的セマンティクス
 
-This document will help us rewrite Carp's dynamic evaluator (defined in Eval.hs) to make it behave in a more principled and non-surprising way.
+このドキュメントは、Carp の動的評価器（Eval.hs で定義）を書き直し、より一貫性があって驚きの少ない挙動を実現するための指針をまとめたものです。
 
-## Goals of the rewrite
-* Fix the various bugs related to dynamic evaluation that has been found (see "Relevant issues" below).
-* Add missing features that are to be expected in a dynamic Lisp (see below).
-* Make it easy to extend the dynamic evaluator with new features in the future.
+## 改修の目的
+* 動的評価に関する既知のバグを修正する（「関連 issue」を参照）
+* 動的 Lisp として期待される機能を追加する
+* 将来的に動的評価器へ機能を追加しやすくする
 
-## Relevant issues
+## 関連 issue
 * https://github.com/carp-lang/Carp/issues/560
 * https://github.com/carp-lang/Carp/issues/555
 * https://github.com/carp-lang/Carp/issues/545
@@ -17,153 +17,148 @@ This document will help us rewrite Carp's dynamic evaluator (defined in Eval.hs)
 * https://github.com/carp-lang/Carp/issues/660
 * https://github.com/carp-lang/Carp/issues/453
 
-## Desired features (currently missing)
-* Documentation on how to use the dynamic language and the macro system
-* Complete macro facilities (quasiquoting, splicing, complete error reporting, etc)
-* Dynamic stack traces
-* Auto completion of user-defined names
+## 追加したい機能（現状は未実装）
+* 動的言語およびマクロシステムの使い方を解説するドキュメント
+* 準クォート、スプライシング、詳細なエラー報告などを含む本格的なマクロ機能
+* 動的スタックトレース
+* ユーザ定義名の補完
 
 <hr>
 
-## Index
+## 目次
 [TODO]
 
-## 0. Terms used in this document
-* form : Any valid Carp data struture as represented in text.
-* top level : Any form that isn't embedded in another form.
-* Static Carp : The compiled version of the Carp language.
-* Dynamic Carp : The interpreted, functional, GC'ed version of the Carp language.
+## 0. 用語
+* form : テキストとして表現された Carp の任意の有効なデータ構造。
+* top level : 別の form に埋め込まれていない form。
+* Static Carp : Carp 言語のコンパイル済みバージョン。
+* Dynamic Carp : Carp 言語のインタプリタ版（関数型で GC あり）。
 
-## 1. Scoping Rules
-Related issues:
+## 1. スコープ規則
+関連 issue:
 * https://github.com/carp-lang/Carp/issues/659
 
-Questions:
-#### How does Carp figure out what the value of the symbol X is?
-Lexical scoping (look in the current scope, then any enclosing scope, up until global scope).
-Things that create scopes:
-- function definitions (defn, defndynamic, fn)
-- let
-- modules
+設問:
+#### Carp はシンボル X の値をどのように決定するか？
+レキシカルスコープで解決します（現在のスコープから始め、外側へ、最後はグローバルスコープまで探索）。スコープを生成するものは以下の通りです。
+- 関数定義（`defn`, `defndynamic`, `fn`）
+- `let`
+- モジュール
 
-#### How do you set the value for symbol X?
-
+#### シンボル X の値を設定するには？
 `(set! <symbol> <value>)`
 
-#### Are there any reserved names?
-Yes (see the Parsing module for more info)
+#### 予約語はあるか？
+あります（詳細は Parsing モジュールを参照）。現在の予約語は以下の通りです。
+- `defn`
+- `def`
+- `do`
+- `while`
+- `fn`
+- `let`
+- `break`
+- `if`
+- `match`
+- `true`
+- `false`
+- `address`
+- `set!`
+- `the`
+- `ref`
+- `deref`
+- `with`
 
-- defn
-- def
-- do
-- while
-- fn
-- let
-- break
-- if
-- match
-- true
-- false
-- address
-- set!
-- the
-- ref
-- deref
-- with
+実際にはさらに多くの識別子を予約語扱いにすべきです。また、`defmacro` 内の `:rest` トークンも予約されています。
 
-More things should be moved to the reserved list, actually.
-The `:rest` token in defmacro is also reserved.
+#### キーワードは存在するか？
+現状はありません。将来的にマクロで導入される可能性があります（例: https://gist.github.com/sdilts/73a811a633bb0ef3dd7e31b84a138a5a）。
 
-#### What is a keyword?
-There are no keywords. Maybe will be in the macros, see this implementation https://gist.github.com/sdilts/73a811a633bb0ef3dd7e31b84a138a5a.
+#### 動的 Carp と静的 Carp で名前空間は異なるか？
+同じモジュールを共有しますが、動的探索は動的関数のみ、静的探索は静的関数のみを見つけます。
 
-#### Are there different namespaces for dynamic and static Carp?
-They use the same modules but dynamic lookup will only find dynamic functions, and static lookup will only find static functions.
+### 1.1 グローバル変数
+設問:
+#### グローバル変数は可変か？
+はい。
 
-### 1.1 Global Variables
-Questions:
-#### Are global variables mutable?
-Yes.
+#### どのように変更され、いつ反映されるか？
+`set!` を使います。内部的には `IORef` を用いており、変更は即座に反映されます。
 
-#### How are they mutated? When do these mutations come into affect?
-Using `set!`. The mutation comes into effect immedately (using IORefs internally).
+#### グローバル変数のスコープはレキシカルかダイナミックか？
+レキシカルです（動的スコープは存在しません）。
 
-#### Do global variables have lexical or dynamic scope?
-Lexical (no dynamic scope for anything).
+### 1.2 ローカル変数
+設問:
+#### ローカル変数は可変か？
+はい。
 
-### 1.2 Local variables
-Questions:
-#### Are local variables mutable?
-Yup.
+#### ローカル変数はいつスコープに入り、いつ抜けるか？
+レキシカルスコープの規則に従います。関数と `let` が新しい変数を導入します。
 
-#### When do local variables come in and out of scope?
-Lexical scoping rules, functions and let create new variables.
+#### クロージャとは？クロージャ内の変数に関する重要なルールは？
+キャプチャされた変数は可変ではありません。動的ラムダは `(fn ...)` が評価された時点での環境全体を捕捉します。
 
-#### What is a closure? What are the important rules for variables inside closures?
-No captured variables are mutable.
-The dynamic lambdas captures the whole environment at the time the closure is created (when the `(fn ...)` form is evaluated).
+### 1.3 名前空間の規則
+設問:
+#### `Foo` モジュールと `Bar` モジュールの双方に `a` が存在するとき、それぞれをどう参照するか？
+`Foo.a`, `Bar.a` のようにドット記法を使います。`(use <module>)` を利用するとモジュール名の指定を省略できます。
 
-### 1.3. Namespace Rules
-Questions:
-#### Given symbols `a` in the `Foo` module and `a` in the `Bar` module, how do I refer to each of them?
-Using `.`, Foo.a and Bar.a.
-By using `(use <module name>)` you can avoid having to specify the module.
+#### 複数モジュールをインポートし、同名シンボルがあるとどうなるか？
+シンボル解決時に実行時エラーになります。
 
-#### What happens if multiple modules are imported and they contain the same symbol?
-Runtime error when looking up the symbol.
+#### `Foo.a` と `Bar.a` が存在するとき、`a` はどちらを参照するか？
+どちらのモジュールも `use` していなければ参照できません。どちらか一方だけを `use` していればそちらを参照し、両方を `use` している場合は曖昧なためエラーになります。
 
-#### Given the symbols`Foo.a` and `Bar.a`, exist, which symbol does `a` refer to?
-Neither, unless any single one of the modules (Foo/Bar) is imported with `use`. If both are imported the lookup is an error since it can't be resolved to a single value.
+#### 関数と変数は同じ名前空間に属するか？
+はい。同じ名前空間にあります。型は別の名前空間です。
 
-#### Do functions and variables live in the same namespace?
-Yes. Types live in a different namespace.
+### 1.4 定義
+設問:
+#### どのような定義があり、どう作られるか？
 
-### 1.4 Definitions
-Questions:
-#### What kinds of definitions are there and how are they created?
+動的コンテキスト:
+- `defndynamic`（動的関数を定義）
+- `defdynamic`（動的グローバル変数を定義）
+- `defmacro`（マクロを定義）
 
-Dynamic context:
-- defndynamic (creates dynamic functions)
-- defdynamic (creates dynamic global variables)
-- defmacro (creates macros)
+静的コンテキスト:
+- `defn`（静的関数を定義）
+- `def`（静的グローバル変数を定義）
+- `deftype`（積型・和型を定義）
+- `register`（外部関数を利用可能にする）
 
-Static context:
-- defn (creates static functions)
-- def (creates static global variables)
-- deftype (for defining product- and sumtypes)
-- register (for making external functions available)
+共通:
+- `defmodule`
 
-All contexts:
-- defmodule
-
-## 2. Evaluation Rules
-Related issues:
+## 2. 評価規則
+関連 issue:
 * https://github.com/carp-lang/Carp/issues/555
 
-Questions:
-#### When are macros evaluated?
-#### When are symbols evaluated?
-#### When are forms evaluated?
-#### Are forms evaluated left-to-right or right-to-left?
-#### How does error reporting work?
+設問:
+#### マクロはいつ評価されるか？
+#### シンボルはいつ評価されるか？
+#### form はいつ評価されるか？
+#### form は左から右、右から左のどちらで評価されるか？
+#### エラー報告はどのように行われるか？
 
-### 2.1 Macros
-Questions:
-* What is a macro?
-* What functions are available at macro-expansion time?
-* What is quasi-quoting and what is its syntax?
-* What is splicing, and what is its syntax?
+### 2.1 マクロ
+設問:
+* マクロとは何か？
+* マクロ展開時に利用できる関数は？
+* 準クォートとは？構文は？
+* スプライシングとは？構文は？
 
 ### 2.2 REPL
-Questions:
-* How does the REPL know when to evalutate something in the dynamic or static context?
-* When does it decide to run the given code in the dynamic or static context?
+設問:
+* REPL はコードを動的／静的コンテキストのどちらで評価するかをどう判定するか？
+* いつ動的コンテキストで実行し、いつ静的コンテキストで実行するかを決定するか？
+* いつ動的コンテキストで実行し、いつ静的コンテキストで実行するかを決定するか？
 
-## 3. Types
-Issues:
+## 3. 型
+関連 issue:
 * [#560 Add Reflection Module Proposal](https://github.com/carp-lang/Carp/issues/560)
 
-Questions:
-* What types are available?
-* When is a form typechecked?
-* How do you refer to a specific type? Are types [first class citizens](https://en.wikipedia.org/wiki/First-class_citizen)?
+設問:
+* どのような型が利用できるか？
+* form はいつ型チェックされるか？
+* 特定の型をどう参照するか？型は[第一級オブジェクト](https://en.wikipedia.org/wiki/First-class_citizen)か？

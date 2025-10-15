@@ -1,79 +1,74 @@
-# Installation
+# インストール
 
-## Latest release
+## 最新リリース
 
-See [https://github.com/carp-lang/Carp/releases](https://github.com/carp-lang/Carp/releases).
+最新リリースは [https://github.com/carp-lang/Carp/releases](https://github.com/carp-lang/Carp/releases) を参照してください。
 
-## Building the Carp executable from source
+## ソースから Carp をビルドする
 
-1. Make sure you have a recent version of [Stack](https://docs.haskellstack.org/en/stable/README/) installed.
-2. Clone this repo to your machine.
-3. Run ```stack build``` in the root of the project directory.
-4. ```stack install``` will install the Carp command line tool for easy access on your system.
-5. Make sure that the directory where stack installs executables is on your PATH, i.e: ```export PATH=~/.local/bin:$PATH```.
+1. 最新の [Stack](https://docs.haskellstack.org/en/stable/README/) をインストールします。
+2. このリポジトリをローカルにクローンします。
+3. プロジェクトのルートディレクトリで `stack build` を実行します。
+4. `stack install` を実行すると Carp のコマンドラインツールがシステム上にインストールされます。
+5. Stack が実行ファイルを配置するディレクトリが PATH に含まれていることを確認します。例: `export PATH=~/.local/bin:$PATH`
 
-## Setting the CARP_DIR
+## CARP_DIR を設定する
 
-To be able to run `carp` from anywhere on you system, the executable must know where to find its core libraries and other files.
-Set the environment variable CARP_DIR so that it points to the root of the Carp repo.
+どこからでも `carp` を実行できるようにするには、実行ファイルがコアライブラリなどを見つけられる必要があります。環境変数 `CARP_DIR` を Carp リポジトリのルートに設定してください。
 
-For example, add this to your `.bashrc` or similar:
+例として `.bashrc` などに以下を追加します。
 
 ```bash
 export CARP_DIR=~/Carp/
 ```
 
-You should now be able to start Carp from anywhere:
+設定後は任意の場所から Carp を起動できます。
 
 ```bash
 $ carp
 ```
 
-## Ensuring an UTF-8 aware LC_CTYPE locale in POSIX environments
+## POSIX 環境での UTF-8 対応 LC_CTYPE の設定
 
-To be able to handle UTF-8 correctly when using `carp`'s interactive repl (binaries from `carp` always handle UTF-8 correctly),
-all POSIX aware environments (Linux, MacOs or even Emacs's eshell inside a Windows 10)
-need to have an `LC_CTYPE` environment variable set and exported to an UTF-8 aware value.
+`carp` の対話型 REPL で UTF-8 を正しく扱うには（生成済みバイナリ自体は常に UTF-8 対応です）、Linux や macOS、あるいは Windows 10 上の Emacs eshell など POSIX 互換シェルで `LC_CTYPE` を UTF-8 対応の値に設定・エクスポートしておく必要があります。
 
-For example, add this to your `.bashrc` or similar:
+例として `.bashrc` に以下を追加します。
 ```bash
 export LC_CTYPE=C.UTF-8
 ```
-Take into account that the the environment variable `LC_ALL`, when set, overrides the value of `LC_CTYPE`.
-So you may want to `unset` `LC_ALL` or to set and export it to an UTF-8 aware value.
-You can see the values of `LC_ALL` and `LC_CTYPE` with the command `locale`.
 
-## C compiler
+ただし `LC_ALL` が設定されている場合は `LC_CTYPE` よりも優先されるため、`LC_ALL` を `unset` するか、同じく UTF-8 対応の値に設定してください。現在の `LC_ALL` と `LC_CTYPE` の値は `locale` コマンドで確認できます。
 
-The `carp` executable will emit a single file with C code, `main.c` and try to compile it using an external C compiler.
-On macOS and Linux it defaults to `clang`, so make sure you have that installed (On macOS this is preferably done by installing XCode, including its developer tools).
+## C コンパイラ
 
-On Windows the default C compiler used by Carp is `clang-cl.exe` which compiles the code using Clang but links it with the Visual Studio linker. Tip: use the package manager [Scoop](https://scoop.sh/) to install LLVM for an easy way to set this up on Windows. Also make sure you have Visual Studio with the C/C++ addon installed. Please note that you *don't* need WSL (Windows Subsystem for Linux) to use Carp.
+`carp` 実行時には `main.c` という 1 つの C コードファイルが生成され、外部の C コンパイラでビルドされます。macOS と Linux ではデフォルトで `clang` を利用するので、インストールしておいてください（macOS では Xcode と開発者ツールを導入するのが簡単です）。
 
-If you want to use another compiler, you can configure the exact build command like so:
+Windows では既定で `clang-cl.exe` を使用し、Clang でコンパイルした後 Visual Studio のリンカでリンクします。パッケージマネージャー [Scoop](https://scoop.sh/) を使うと LLVM のインストールが簡単です。また、Visual Studio に C/C++ 拡張を入れておく必要があります。Carp を使うのに WSL（Windows Subsystem for Linux）は不要です。
+
+別のコンパイラやコマンドを使いたい場合は、次のようにビルドコマンドを指定できます。
 
 ```clojure
 (Project.config "compiler" "gcc --important-flag")
 ```
 
-## SDL, GLFW, etc
+## SDL や GLFW など
 
-The examples involving graphics/sound/interaction will require the following libraries installed on your system:
+グラフィックス／サウンド／インタラクション関連のサンプルを動かすには、次のライブラリをインストールしておく必要があります。
 
-* [SDL 2](https://www.libsdl.org/download-2.0.php) (cross platform game/interactivity library)
-* [SDL_image 2](https://www.libsdl.org/projects/SDL_image/) (image helpers)
-* [SDL_ttf 2](https://www.libsdl.org/projects/SDL_ttf/) (font rendering)
-* [SDL_mixer 2](https://www.libsdl.org/projects/SDL_mixer/) (audio playback)
-* [glfw](http://www.glfw.org) (Create a rendering context for OpenGL or Vulcan)
+* [SDL 2](https://www.libsdl.org/download-2.0.php) — クロスプラットフォームなゲーム／インタラクションライブラリ
+* [SDL_image 2](https://www.libsdl.org/projects/SDL_image/) — 画像読み込みヘルパ
+* [SDL_ttf 2](https://www.libsdl.org/projects/SDL_ttf/) — フォント描画
+* [SDL_mixer 2](https://www.libsdl.org/projects/SDL_mixer/) — オーディオ再生
+* [glfw](http://www.glfw.org) — OpenGL/Vulkan のレンダリングコンテキストを生成
 
-On macOS and Linux we use [pkg-config](https://www.freedesktop.org/wiki/Software/pkg-config/) to handle include paths and linking flags, so make sure you have that properly installed and configured to find the external libraries.
+macOS や Linux では [pkg-config](https://www.freedesktop.org/wiki/Software/pkg-config/) を使ってインクルードパスやリンクフラグを解決するので、外部ライブラリが見つかるよう適切に設定してください。
 
-Please let us know if you have trouble getting these bindings to work! We have tried making everything as reliable as possible but there are often corner cases when it comes to dependency management. And remember that you're always welcome to start an issue or ask questions in [the gitter channel](https://gitter.im/carp-lang/Carp).
+バインディングの利用で困ったことがあればぜひ知らせてください。依存関係の扱いではどうしても例外ケースが生じることがあります。問題報告や質問は[公式 Gitter チャンネル](https://gitter.im/carp-lang/Carp)でも歓迎しています。
 
-## Footnote for Windows
-You can install clang with mingw64 but you'll also want to run `vcvarsall.bat amd64` or `vcvarsall.bat x86` each time you start your shell to help clang find the right headers.
-See https://github.com/carp-lang/Carp/issues/700 or https://github.com/carp-lang/Carp/issues/1323 for more information.
+## Windows 向け補足
 
-Also when compiling files with `carp` from Windows you must ensure that :
-* the file is encoded either as ANSI or UTF-8. (Using another encoding like UTF-8-BOM doesn't work.)
-* using either Unix (LF) or Windows (CR LF) as linefeed/newline. (Using Macintosh (CR) as newline doesn't work.)
+mingw64 を使って clang をインストールすることもできますが、その場合はシェルを開くたびに `vcvarsall.bat amd64` もしくは `vcvarsall.bat x86` を実行し、必要なヘッダを見つけられるようにすることをおすすめします。詳しくは https://github.com/carp-lang/Carp/issues/700 や https://github.com/carp-lang/Carp/issues/1323 を参照してください。
+
+また Windows で Carp を使う場合は、次の点にも注意してください。
+* ソースファイルのエンコーディングは ANSI もしくは UTF-8 にする（UTF-8 BOM 付きは不可）。
+* 改行コードは Unix (LF) か Windows (CR LF) を使用する（Macintosh (CR) だけの改行は不可）。

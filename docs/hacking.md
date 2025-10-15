@@ -1,210 +1,129 @@
-# Hacking the Carp Compiler
+# Carp コンパイラをハックする
 
-This doc contains various tips and tricks, notes, explanations and examples
-that can help you make changes to the Carp compiler. Be forewarned that it's
-not an exhaustive guide book, and likely will remain a hodgepodge of
-accumulated remarks, observations and hints contributed by people that have
-modified the compiler in the past.
+この文書では Carp コンパイラを変更する際のヒントやメモ、補足説明、実例などをまとめています。網羅的なガイドではなく、過去にコンパイラに手を入れた人たちが残した知見の寄せ集めだと思ってください。
 
-> Note: General familiarity with compilers and compilation terminology is
-> assumed.
+> なお、コンパイラやコンパイル処理に関する基本的な用語には慣れているものとして話を進めます。
 
-## Structure
+## 構成
 
-The Carp compiler source lives in the `src/` directory. Carp is, roughly
-speaking, organized into four primary passes or components:
+Carp コンパイラのソースコードは `src/` ディレクトリにあります。ざっくり言うと、Carp は 4 つの主要なパス（フェーズ）で構成されています。
 
 ![carp compiler phases](./compiler-passes.svg)
 
-Each source file plays a part in one or more components/phases in the compiler.
-The sections below briefly describe the purpose of each stage and list
-important source files. You can use these sections to get a rough idea of what
-files you might need to edit in order to alter the functionality of a
-particular phase.
+各ソースファイルはコンパイラの 1 つ以上のフェーズに関わっています。以下の節では、それぞれのフェーズの役割と重要なソースファイルを簡単に紹介します。どのフェーズの挙動を変える必要があるのかあたりを付ける際の道標として活用してください。
 
-> Note: Some sources contain definitions that are important or used in pretty
-> much every phase of the compiler, in result some files may appear more than
-> once in the sections below.
+> 補足: いくつかのファイルは複数フェーズで共通に利用されます。そのため、同じファイルが何度か登場する場合があります。
 
-### Parsing
+### パース
 
-The parsing phase translates `.carp` source files into abstract syntax trees
-(AST). In carp, AST nodes are represented using an abstract data type called
-`XObj`. `XObj`s are ubiquitous across the compiler and are used in several
-different phases and contexts. Every `XObj` consists of:
+パースフェーズは `.carp` ソースコードを抽象構文木（AST）へ変換します。Carp では AST ノードを `XObj` という抽象データ型で表現します。`XObj` はコンパイラ全体で頻繁に登場し、さまざまなフェーズやコンテキストで利用されます。各 `XObj` は次の 3 つから構成されています。
 
-- An `Obj` which is the representation of some carp source code as an abstract
-  data type
-- `Info`: which contains additional information about the source code that
-  generated an `Obj` (e.g. its location in a source file)
-- `Ty`: An valid carp Type for the `Obj`, as determined by the [type
-  system](#type-system).
+- `Obj` : Carp のソースコードを抽象化したデータ表現
+- `Info` : 生成元ソースコードに関する補足情報（ファイル上の位置など）
+- `Ty` : [型システム](#type-system)が決定した `Obj` の Carp 型
 
-The following sources are important for parsing:
+主に関係するソースは以下の通りです。
 
-- `Parsing.hs` -- parsing logic that translates carp source code into abstract
-  syntax.
-- `XObj.hs` -- defines the valid Carp AST nodes.
+- `Parsing.hs` — Carp のソースコードを AST へ変換する処理
+- `XObj.hs` — Carp で有効な AST ノード定義
 
-### Dynamic Evaluator
+### 動的評価器
 
-As stated in the [Macro guide](Macros.md#inner-workings) the dynamic evaluator
-is the central component in the compiler. As the name suggests, the evaluator
-evaluates parsed carp code (`XObjs`) and prepares it for
-[emission](#code-emission). Evaluation entails:
+[マクロガイド](Macros.md#inner-workings)で説明されているとおり、動的評価器はコンパイラの中心的なコンポーネントです。名前の通り、`XObj` を評価して[コード生成](#code-emission)の準備を整えます。評価が行う主な処理は次のとおりです。
 
-- Expanding macros and dynamic functions
-- Resolving bindings to other forms
-- Requesting type inference for forms
-- Requesting borrow checking for forms
+- マクロと動的関数の展開
+- ほかのフォームへのバインディング解決
+- フォームの型推論要求
+- フォームの借用検査要求
 
-In addition to the `XObjs` corresponding to the source file being compiled, the
-evaluator relies on a `Context`--`Context` is a global object that contains
-state for the compiler. The compiler's `Context` is comprised of several
-environments, defined by the `Env` type--which hold references to known
-bindings. Different environments are used by different phases of the compiler
-to evaluate forms, resolve types, and, generally speaking prepare code for
-emission.
+評価器はコンパイル対象となる `XObj` 群に加えて `Context` を利用します。`Context` はコンパイラ全体の状態を保持するグローバルなオブジェクトです。内部には `Env` 型で表される複数の環境があり、それぞれが既知のバインディングを保持します。各フェーズは必要に応じて環境を参照し、フォームの評価・型解決・コード生成に備えます。
 
-`Binders` are another important abstract data type used in evaluation. Any
-value that's bound to a name in a source program is translated into a `binder`,
-which is comprised of the `XObj` of the form bound to the name, as well as
-additional metadata for the binding. `Binders` are added to the environments in
-the `Context`.
+`Binder` も評価で重要な抽象データ型です。ソースコード内で名前に束縛されたあらゆる値は `binder` へと変換され、該当する `XObj` と追加メタデータを保持します。`Binder` は `Context` 内の環境へ登録されます。
 
-The following sources are important for evaluation:
+評価に関係する主なソースは次の通りです。
 
-- `Eval.hs` -- this is the entry point for the evaluator.
-- `Obj.hs` -- Defines `Context` which carries compiler state across
-  evaluation passes in the form of `Env`s, defines `Env` which holds `Binders`
-from names to `XObjs`.
-- `Primitives.hs` -- builtin functions or "keywords" that **do not**
-  evaluate their arguments
-- `Commands.hs` -- builtin functions or "keywords" that evaluate their
-  arguments
-- `StartingEnv.hs` -- defines the starting environment for the compiler to
-  work with. All commands and primitives are registered here, so that
-evaluation passes can use them.
-- `Lookup.hs` -- Functions for looking up `Binders` in a given environment
-  (`Env`).
-- `Expand.hs` -- Functions for traversing forms and doing syntactic analysis.
-   Historically also expanded macros (that functionality was moved into
-   `Eval.macroExpand`).
-- `Infer.hs` -- Functions for performing type inference -- entry point into the
-  type system.
-- `Qualify` -- Qualifies symbols with appropriate module names.
+- `Eval.hs` — 評価器のエントリーポイント
+- `Obj.hs` — `Env` を束ねた `Context` の定義、`Env` や `Binders` の管理
+- `Primitives.hs` — 引数を評価しない組み込み関数（キーワード）の定義
+- `Commands.hs` — 引数を評価する組み込み関数（キーワード）の定義
+- `StartingEnv.hs` — コンパイラ起動時に利用する初期環境の定義（全コマンド・プリミティブの登録）
+- `Lookup.hs` — 指定した環境 (`Env`) から `Binder` を検索する関数
+- `Expand.hs` — フォームを走査して構文解析を行う関数群（以前はマクロ展開も担当していたが、現在は `Eval.macroExpand` に移譲）
+- `Infer.hs` — 型推論を行う関数群（型システムへの入り口）
+- `Qualify.hs` — シンボルへ適切なモジュール名を付加
 
-Some other pieces of the type system and borrow checking mechanisms could be
-included in this list as well, but this list captures the core functionality
-related to evaluation. Generally speaking, the evaluation component is the
-conductor of our compilation symphony and orchestrates all the other parts of
-the compiler.
+型システムや借用チェッカ関連のファイルも評価に深く関わりますが、ここではコア部分に絞っています。動的評価器はコンパイラ全体の「指揮者」と言える存在で、他のコンポーネントを連携させながらコンパイルを進行させます。
 
-> Note: For a more in depth look at the dynamic evaluator, see [the section on
-> inner workings in the Macro guide](Macros.md#inner-workings)
+>動的評価器についてさらに詳しく知りたい場合は、[マクロガイドの内部構造の章](Macros.md#inner-workings)を参照してください。
 
-### Type System
+### 型システム
 
-The type system is responsible for checking the types of Carp forms and
-ensuring programs are type safe. It also supports polymorphism and is
-responsible for replacing polymorphic types with concrete types.
+型システムは Carp のフォームの型を検証し、プログラム全体の型安全性を保証します。また、多相性をサポートし、多相型を具体型へ置き換える役割も担います。Carp の型は `Ty` データ型で表現されます。
 
-Carp types are represented by the `Ty` data type.
+主なソースファイルは以下のとおりです。
 
-The following sources are important for the type system:
+- `Types.hs` — Carp における有効な型 (`Ty`) の定義。2 つの型が両立するかどうかを調べる単一化処理や、Carp の型名を C の識別子へ変換するマングリング処理も含まれます。
+- `TypeError.hs` — 型チェック時のエラー定義
+- `AssignTypes.hs` — 変数へ具体的な型を割り当て
+- `Polymorphism.hs` — 多相関数を具体化した際に、具体的な C 側識別子を決定
+- `Validate.hs` — ユーザ定義型の妥当性を検証
+- `Constraints.hs` — 環境内の型や型変数のあいだにある制約を導出・解決
+- `Concretize.hs` — 多相型を含むフォームを具体型へ変換
+- `InitialTypes.hs` — 与えられた `XObj`（AST ノード）の初期型を推定
+- `GenerateConstraints.hs` — 指定したフォームに関する型制約を算出
 
-- `Types.hs` -- defines the `Ty` data type, which represents valid carp types.
-  Also contains unification checking code to determine whether or not two types
-are compatible. Also contains mangling code, that translates carp type names
-with valid C identifiers.
-- `TypeError.hs` -- defines type checking errors.
-- `AssignTypes.hs` -- Assigns concrete types to variables.
-- `Polymorphism.hs` -- Given a concretized polymorphic function, determines the
-  correct valid C identifier for the concrete function.
-- `Validate.hs` -- Checks that user-defined types are valid.
-- `Constraints.hs` --  Determines and solves constraints between types and type
-  variables in an environment.
-- `Concretize.hs` --  Transforms forms that involve polymorphic types into
-  concrete types.
-- `InitialTypes.hs` -- determines the initial type of a given `XObj` (AST
-  node).
-- `GenerateConstraints.hs` -- determines type constraints for a given form.
+### 借用チェック／所有権システム
 
-### Borrow Checking/Ownership System
+借用チェックとライフタイム引数は[型システム](#type-system)を拡張した仕組みです。そのため、型システムで重要なファイルは借用チェッカにとっても同じく重要です。
 
-Borrow checking an lifetime parameters are an extension of the [type
-system](#type-system). All of the files that are important to the type system
-are likewise important for the borrow checker.
+### コード生成
 
-### Code Emission
+コンパイラの最後の仕事は、入力された Carp コードに対応する C コードを出力することです。コード生成は `Template` の概念に大きく依存しており、評価済みの Carp AST ノードに基づいて C の文字列を組み立てる仕組みになっています。
 
-The compiler's final job is to emit C code corresponding to the source Carp
-input. Emission relies heavily on the concept of `Templates` -- effectively a
-structured way to generate C strings based on evaluated Carp AST nodes.
+主なソースは次のとおりです。
 
-The following sources are important for the code emission system:
+- `ArrayTemplates.hs` — Carp の配列操作に対応する C コードのテンプレート
+- `StaticArrayTemplates.hs` — StaticArray 操作用のテンプレート
+- `Deftype.hs` — ユーザ定義構造体（積型）のテンプレートと関連処理
+- `Sumtypes.hs` — ユーザ定義和型のテンプレートと関連処理
+- `StructUtils.hs` — 構造体のユーティリティ関数向けテンプレート
+- `Template.hs` — C コード生成に関する共通の手順
+- `ToTemplate.hs` — C コード文字列からテンプレートを作成するヘルパ
+- `Scoring.hs` — 型や `XObj` の情報を元に、生成した C のバインディングを適切な順序に並べ替える
+- `Emit.hs` — 評価済みの Carp コードに基づいて最終的な C コードを出力
 
-- `ArrayTemplates.hs` -- Templates for C code corresponding to Array use in
-  Carp.
-- `StaticArrayTemplates.hs` -- Templates for C code corresponding to
-  StaticArray use in Carp.
-- `Deftype.hs` -- Templates for C code corresponding to user defined structs in
-  Carp (aka product types) (also contains some other logic for registering
-bindings for such types).
-- `Sumtypes.hs` -- Templates for C code corresponding to user defined sumtypes
-  in Carp (also contains some other logic for registering bindings for such
-types).
-- `StructUtils.hs` -- Templates for C code corresponding to utility functions
-  for Carp structs.
-- `Template.hs` -- General compiler instructions for generating C code.
-- `ToTemplate.hs` -- Helper for creating templates from strings of C code.
-- `Scoring.hs` -- determines an appropriate sort order for emitted C bindings
-  based on typing and `XObj` information.
-- `Emit.hs` -- Emits generated C code based on evaluated, compiled Carp source
-  code.
+### その他のソース
 
-### Other sources
+上記以外にも、コンパイラ内でさまざまな役割を果たすユーティリティ的なファイルが存在します。
 
-In addition to the sources listed above, there are other miscellaneous source
-files that serve different purposes in the compiler:
+- `Repl.hs` — REPL の機能（キーワード補完、REPL コマンドなど）
+- `Util.hs` — 汎用的なユーティリティ関数
+- `ColorText.hs` — REPL やコンパイラ出力の色付けをサポート
+- `Path.hs` — ファイルパス関連の処理
+- `RenderDocs.hs` — アノテーション付き Carp コードからドキュメントを生成する機能
 
-- `Repl.hs` -- defines repl functionality, such as keyword completion, repl
-  commands, etc.
-- `Util.hs` -- various utility functions
-- `ColorText.hs` -- supports colored output in the Repl/compiler output.
-- `Path.hs` -- Filepath manipulation functions.
-- `RenderDocs.hs` -- Functionality for generating documentation from annotated
-  carp Code.
+## ミニ HowTo 集
 
-## Mini HowTos
+コンパイラへの変更のなかには頻度の高いものがあり、手順がある程度決まっています。以下では、代表的なケースの手順を紹介します。
 
-Select compiler changes are more frequent than others and have common
-high-level steps. The following sections provide some guidance on making such
-changes.
+### 新しいプリミティブを追加する
 
-### Adding a new Primitive
+特別な事情がない限り、新しいプリミティブを追加する手順は次のとおりです。
 
-If it doesn't require anything fancy or out of the ordinary, adding a new
-primitive to the compiler entails the following:
+1. `Primitives.hs` に新しいプリミティブを定義する
+2. `StartingEnv.hs` で `makePrim` を使って初期環境へ登録する
 
-1. Define your new primitive in `Primitives.hs`
-2. Add your primitive to the starting environment using `makePrim` in
-  `StartingEnv.hs`
+#### プリミティブを定義する
 
-#### Define your Primitive
-
-Primitives are functions of the `Primitive` type:
+プリミティブは `Primitive` 型の関数です。
 
 ```
 type Primitive = XObj -> Context -> [XObj] -> IO (Context, Either EvalError XObj)
 ```
 
-Every primitive takes an xobj, the form that represents the primitive, a
-compiler context, and a list of XObjs the primitive form's arguments.
-Primitives return a new `Context`, updated based on the logic they performed,
-and either an XObj or evaluation error that's reported to the user.
+各プリミティブは自身を表す `XObj`、コンパイラの `Context`、そして引数となる `XObj` のリストを受け取ります。戻り値は処理結果を反映した新しい `Context` と、評価結果の `XObj` もしくはユーザへ報告する評価エラーのいずれかです。
 
-For example, here's how the `defmodule` primitive maps to the `Primitive` type:
+例えば `defmodule` プリミティブと `Primitive` 型の対応は次のようになります。
 
 ```
 (defmodule Foo (defn bar [] 1))
@@ -212,114 +131,83 @@ For example, here's how the `defmodule` primitive maps to the `Primitive` type:
  XObj      [XObj] (arguments)
 ```
 
-> The `Context` argument captures the state of the compiler and doesn't have a
-> corresponding direct representation in Carp forms.
+> `Context` 引数はコンパイラの状態を表すためのもので、Carp コード上に直接対応するものはありません。
 
-In `Primitives.hs`, you should name your primitive using the naming scheme
-`primitive<name>`, where `<name>` is the name of the symbol that will call your
-primitive in Carp code. For example, `defmodule` is given by the primitive
-`primitiveDefmodule`.
+`Primitives.hs` では、Carp コードから呼び出すシンボル名を `<name>` としたとき、プリミティブ名を `primitive<name>` とする命名規則に従ってください。`defmodule` の場合は `primitiveDefmodule` になります。
 
-Most of the time, primitives have three core steps:
+多くのプリミティブは次の 3 ステップで実装できます。
 
-- Pattern match on their argument XObjs
-- Lookup existing binders in the current `Context`
-- Perform some logic based on the type of argument XObjs, then update the
-  `Context` as needed.
+- 引数の `XObj` をパターンマッチする
+- 現在の `Context` から既存のバインダを探索する
+- 引数の `XObj` の種類に応じてロジックを実行し、必要に応じて `Context` を更新する
 
-Let's step through each of these core steps by implementing a simple
-`immutable` primitive. The `immutable` primitive will take a variable (the name
-of a form passed to a `def`) and mark it as `immutable`, preventing users from
-calling `set!` on it.
+これらの手順を追いながら、例として `immutable` プリミティブを実装してみましょう。`immutable` は、`def` されたフォームに対して `/set!` を禁止するメタ情報を付与する機能だとします。
 
-- Step 1. Pattern match on arguments.
+- ステップ 1. 引数のパターンマッチ
 
-  First thing's first, our primitive, in carp code, should look like this:
+  Carp 側ではプリミティブを次のように呼び出します。
 
   ```
   (immutable my-var)
   ```
 
-  This means that our primitive should only take a single argument XObj, and
-  that argument should be a `Sym`.
-
-  Let's match some patterns:
+  つまり、引数は 1 つで、`Sym` でなければなりません。パターンマッチは次のように書けます。
 
   ```
-  primitiveImmutable :: Primitive -- our new primitive
+  primitiveImmutable :: Primitive -- 新しいプリミティブ
   primitiveImmutable xobj ctx [XObj (Sym path@(SymPath) _)] =
-    -- TODO: Implement me!
-  primitiveImmutable _ _ xobjs = -- any other number or types of xobj arguments are incorrect! Let's error.
+    -- TODO: ここに実装を追加
+  primitiveImmutable _ _ xobjs = -- 引数の個数や型が想定外ならエラー
     return $ evalError ctx ("`immutable` expected a single symbol argument, but got" ++ show xobjs) (info xobj)
   ```
 
-  And that's all we need to do to pattern match!
+- ステップ 2. 現在のコンテキストからバインダを探す
 
-- Step 2. Lookup binders in the current context
+  正しい引数が渡されたと仮定し、`Sym` が `def` で束縛された変数なのかを調べます。
 
-  Assuming `immutable` gets a correct argument, our next step is to use the
-  `Sym` XObj it received to find out if the symbol is bound to a variable or not.
-
-  `Lookup.hs` defines functions for looking up bindings in the various
-  environments contained in a context. We'll call lookup functions to check
-  whether or not the symbol argument we get is bound to a `def` form (in which
-  case it's a variable). If the symbol isn't bound to a `def` we'll error.
-
-
-  So, we'll get the binding for our argument (a `Binder`), match against the
-  binding's `XObj` and continue working only if it's a `def`.
+  `Lookup.hs` には `Context` 内の各環境からバインディングを検索する関数が定義されています。ここではシンボルに対応する `def` が存在するか調べ、存在しなければエラーにします。
 
   ```
-  primitiveImmutable :: Primitive -- our new primitive
+  primitiveImmutable :: Primitive
   primitiveImmutable xobj ctx [XObj (Sym path@(SymPath) _)] =
     let global = contextGlobalEnv ctx
         binding = lookupInEnv path global
     in  case binding of
-          Just (_, Binder meta (XObj )) -> -- TODO: This is a def! Great. Do more work here.
-          _ -> -- anything that isn't a def; error
+          Just (_, Binder meta (XObj )) -> -- TODO: def であることを確認できたら処理を続ける
+          _ ->
             return $ evalError ctx ("`immutable` expects a variable as an argument") (info xobj)
-  primitiveImmutable _ _ xobjs = -- any other number or types of xobj arguments are incorrect! Let's error.
+  primitiveImmutable _ _ xobjs =
     return $ evalError ctx ("`immutable` expected a single symbol argument, but got" ++ show xobjs) (info xobj)
   ```
 
-- Step 3. Perform logic; update the `Context`
+- ステップ 3. ロジックを実行し、`Context` を更新
 
-  Finally, now that we're certain we've got a def, we'll just perform our
-  special logic then update the context with our modified binder.
-
-  To keep things simple, all we'll do in this primitive is update the binder's
-  `MetaData` with a new key called `immutable` set to `true`. We can later use
-  the value of this meta field to prevent calls to `set!`.
+  無事 `def` だと確認できたら、バインダの `MetaData` に `immutable = true` という項目を追加します。今後 `set!` を呼び出す際にこのメタ情報を参照すれば、書き換えを禁止できます。
 
   ```
-  primitiveImmutable :: Primitive -- our new primitive
+  primitiveImmutable :: Primitive
   primitiveImmutable xobj ctx [XObj (Sym path@(SymPath) _)] =
     let global = contextGlobalEnv ctx
         binding = lookupInEnv path global
     in  case binding of
           Just (_, Binder meta def@(XObj Def _ _)) ->
             let oldMeta = getMeta meta
-                newMeta = meta {getMeta = Map.insert "immutable" trueXObj oldMeta}  -- update the binder metadata
-            in  return $ ctx {contextGlobalEnv = Env (envInsertAt global path (Binder newMeta def))} -- update the context with the binder and it's new meta and return
-          _ -> -- anything that isn't a def; error
+                newMeta = meta {getMeta = Map.insert "immutable" trueXObj oldMeta}
+            in  return $ ctx {contextGlobalEnv = Env (envInsertAt global path (Binder newMeta def))}
+          _ ->
             return $ evalError ctx ("`immutable` expects a variable as an argument") (info xobj)
-  primitiveImmutable _ _ xobjs = -- any other number or types of xobj arguments are incorrect! Let's error.
+  primitiveImmutable _ _ xobjs =
     return $ evalError ctx ("`immutable` expected a single symbol argument, but got" ++ show xobjs) (info xobj)
   ```
 
-And that wraps up the core logic of our primitive. To make it available, we
-just need to register it in `StartingEnv.hs`.
+これでプリミティブ側のロジックは完成です。最後に `StartingEnv.hs` へ登録しましょう。
 
+#### 初期環境へ登録する
 
-#### Add your primitive to the starting environment
-
-To add a primitive to the starting environment, call `makePrim`:
+初期環境へプリミティブを追加するには `makePrim` を呼び出します。
 
 ```
 , makePrim "immutable" 1 "annotates a variable as immutable" "(immutable my-var)" primitiveImmutable
 ```
 
-That's about it. Note that this implementation just adds special metadata to
-bindings--to actually prevent users from calling `set!` on an immutable `def`
-we'd need to update `set!`'s logic to check for the presence of the `immutable`
-metadata.
+この実装はバインディングにメタデータを付与しただけなので、実際に `set!` を禁止するには `set!` 側のロジックで `immutable` メタ情報を参照する処理を追加する必要があります。

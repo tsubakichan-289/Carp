@@ -1,46 +1,34 @@
-# Format Strings
+# 書式付き文字列
 
 {% raw %}
 
-Carp as to ways to format strings, `fmt` and `fstr`. In this document, we
-explore both functions in detail.
+Carp には文字列を整形する方法が 2 つあり、`fmt` と `fstr` が用意されています。本書では両者の違いと使い方を詳しく解説します。
 
 ## `fmt`
 
-`fmt` allows for more control than `fstr`, but also requires more knowledge
-about the data.
+`fmt` は `fstr` よりも詳細な制御が可能ですが、その分データに関する知識が必要になります。
 
 ```clojure
 (fmt "this is an integer %d and this is a string %s." 1 "hi")
 ```
 
-It’s works similarly to [`printf`](https://en.wikipedia.org/wiki/Printf_format_string)
-in C. `fmt` will check that the amount of arguments and format specifiers in
-the format string match.
+基本的な挙動は C の[`printf`](https://en.wikipedia.org/wiki/Printf_format_string) と同様です。フォーマット文字列に含まれる変換指定子の個数と、渡す引数の個数が一致するかどうかを `fmt` が検証します。
 
-All arguments to `fmt` must implement the `format` interface, which is defined
-as:
+`fmt` に渡すすべての引数は `format` インタフェースを実装している必要があります。インタフェースの定義は次のとおりです。
 
 ```clojure
 (definterface format (Fn [String a] String)
 ```
 
-The types are expected to take a format specifier and format according to it.
-As such, which format specifiers are supported is dependent on the
-implementation of `format` on that type. Standard library types expose regular
-format specifiers as in C.
+各型はフォーマット指定子を受け取り、それに沿った整形を行う必要があります。そのため、利用可能な変換指定子は型ごとの `format` 実装に依存します。標準ライブラリが提供する型は、おおむね C と同じ指定子をサポートしています。
 
-Please note that, because `format` is often implemented on top of `snprintf`
-and similar functions, using faulty format specifiers might lead to problems.
+`format` の多くの実装は `snprintf` などの関数を利用しているため、誤った変換指定子を使うと問題を引き起こす可能性がある点に注意してください。
 
-Also, all `fmt` format strings must be literals.
+また、`fmt` に渡すフォーマット文字列はリテラルでなければなりません。
 
 ## `fstr`
 
-Similarly to `fmt`, `fstr` takes a literal string. It uses a simpler interface
-than `fmt`, however, in which the expressions are embedded directly into the
-string and formatted using `str`. As such, the return types of all expressions
-in a `fstr` must implement the `str` interface.
+`fmt` と同様に、`fstr` もリテラル文字列を受け取ります。違いはインタフェースがよりシンプルな点で、式を文字列内に直接埋め込み、`str` を使って整形します。そのため、`fstr` に埋め込む各式の戻り値は `str` インタフェースを実装している必要があります。
 
 ```clojure
 (def x 1)
@@ -49,15 +37,12 @@ in a `fstr` must implement the `str` interface.
 (fstr "this is an integer {x} and this is the first character of a string {(head x)}")
 ```
 
-Any parseable expression may be  embedded in a `fstr`. Expressions are
-delimited using `{}`. Any lone `}` will be  interpreted as a literal, whereas
-literal `{` need to be escaped as `{{`.
+`fstr` の内部には、構文的に正しい任意の式を埋め込めます。式は `{}` で囲んで区切ります。孤立した `}` はリテラルとして扱われ、リテラルの `{` を書きたい場合は `{{` とエスケープします。
 
 ```clojure
 (fstr "{{}") ; => {}
 ```
 
-While possible, it is discouraged to use complicated or even multiline
-expressions inside `fstr`.
+技術的には複雑な式や複数行の式を埋め込むこともできますが、可読性が落ちるため推奨されません。
 
 {% endraw %}

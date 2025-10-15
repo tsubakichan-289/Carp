@@ -1,18 +1,12 @@
-# Derive
+# `derive` の使い方
 
-`derive` is a mechanism that automatically determines how to implement
-interfaces for datatypes based on their members. It also allows you to write
-your own rules for `derive`, called a `deriver`.
+`derive` は、データ型のメンバーに基づいて自動的にインタフェース実装を生成する仕組みです。また、自分で `derive` の振る舞いを定義する「`deriver`」を作成することもできます。
 
-If you’d like to learn how to `derive` interfaces for your types, read the
-[first section](#i-using-derive) of this document. If you’d like to provide a
-deriver for an interface, read [the second section](#ii-writing-derivers) of
-this document.
+自作の型に対してインタフェースを `derive` する方法を知りたい場合は[第1節](#i-using-derive)を、インタフェース用の `deriver` を提供したい場合は[第2節](#ii-writing-derivers)をお読みください。
 
-## I: Using `derive`
+## I: `derive` を利用する
 
-In most cases, using `derive` should be as simple as calling it with the type
-name and interface to implement:
+通常、`derive` の利用は型名と実装したいインタフェースを渡して呼び出すだけです。
 
 ```clojure
 (deftype Point [
@@ -22,39 +16,20 @@ name and interface to implement:
 (derive Point zero)
 (derive Point =)
 
-; if you’d like to generate a different function name
-; pass it as a third argument. This is useful to avoid
-; name collisions
+; 別名で関数を生成したい場合は第三引数を指定
+; 名前衝突を避けたいときなどに便利
 (derive Point str my-str)
 ```
 
-The code above will provide implementations of `zero` and `=` for the type
-`Point` based on its members. The prerequisites for this to work
-are that types are *concrete*—there are no type variables present—and *its
-members implement the interface*. This is because the definition of both
-functions hinges on the definition of its members: `zero` on a type is just
-`zero` of all its members, equality of a type just equality of all of its
-members.
+上記のコードは、`Point` 型のメンバーに基づいて `zero` と `=` の実装を自動生成します。これが成立するためには、型が**具体型であること**（型変数を含まない）と、**メンバー自身が対象のインタフェースを実装していること**が必要です。`zero` の定義はメンバーの `zero` を組み合わせることで成り立ち、`=` も同様にメンバーの比較に依存するためです。
 
-Carp only provides automatic derivation of `=`, `zero`, and `str`. Since the
-code you depend on might provide other derivers, you can inspect them by
-calling `(derivables)`. If you want to find out if a certain interface is
-derivable, you can call `(derivable? <interface>)`. Please note that the
-interface name needs to be quoted.
+Carp が標準で提供する自動導出は `=`, `zero`, `str` の 3 つだけです。ただし依存するライブラリが独自の `deriver` を提供している場合もあります。利用可能な `deriver` は `(derivables)` で確認でき、特定のインタフェースが導出可能かは `(derivable? <interface>)` で調べられます。インタフェース名は引用符付きで渡してください。
 
-If either of the preconditions above is not met, you will have to write your
-own version of these functions, and may not use `derive`.
+上記の前提のいずれかを満たさない場合は、自分で関数を実装する必要があり、`derive` は使えません。
 
-Some users might want to be able to derive update interfaces that take a type,
-do the same thing to all its members, and return it. A good example for this
-in the context of `Point` is `inc`.
+ある型に対して、メンバー全体に同じ処理を適用してその型を返す「更新系」のインタフェースを導出したいケースもあります。`Point` における `inc` がその代表例です。
 
-While generally this might require you to write your own deriver—see [section
-II](#ii-writing-derivers) of this document to learn how to do that—, Carp
-provides a special dynamic function called `make-update-deriver`. It takes a
-unary interface that updates a value and returns it, and extrapolates a
-definition for the encompassing type. This is what this would look like for
-`Point`:
+通常は自作の `deriver` を書く必要があります（詳しくは [第2節](#ii-writing-derivers) を参照してください）が、Carp には `make-update-deriver` という特別な動的関数が用意されています。値を更新して返す単項インタフェースを渡すと、包含する型に対する定義を導き出してくれます。`Point` に対して利用する例は以下の通りです。
 
 ```clojure
 (make-update-deriver 'inc) ; notice the quote
@@ -63,22 +38,15 @@ definition for the encompassing type. This is what this would look like for
 (inc (Point.zero)) ; => (Point 1 1)
 ```
 
-While this can be useful at times, it is limited to the special case of
-functions outlined above: it can only used on functions you would also be able
-to pass into `update-<member>` style functions.
+これは便利な場合がありますが、上記のような特殊なケースに限定されます。`update-<member>` 系の関数に渡せるような関数に対してのみ利用できます。
 
-## II: Writing derivers
+## II: `deriver` を作る
 
-Sometimes you might want to provide your own derivation strategy for other
-interfaces than the ones provide out of the box. In these cases you can provide
-your own deriver using `make-deriver`.
+標準で提供されていないインタフェースに対して独自の導出ロジックを用意したいこともあります。その場合は `make-deriver` を使って自前の `deriver` を定義できます。
 
-The dynamic function `make-deriver` takes three arguments: the quoted name of
-the interface, the names of the arguments it will be passed, and a function
-that, given a type, knows how to generate an implementation for that type.
+動的関数 `make-deriver` は 3 つの引数を取ります。インタフェース名（引用符付き）、呼び出し時に渡される引数名のリスト、そして型を受け取ってその型向けの実装を生成する関数です。
 
-This might sound a little strange, so let’s consider the deriver for `zero` as
-an example:
+イメージしづらいので、`zero` 用の `deriver` を例に見てみましょう。
 
 ```clojure
 (make-deriver 'zero []
@@ -87,18 +55,13 @@ an example:
       (map (fn [_] '(zero)) (members t)))))
 ```
 
-It usually makes sense to read `make-deriver` similar to a function definition:
-its interface name is `zero`, which takes no argument, and we know that if
-we’re given a type we can create a definition for `zero` if we just emit a
-call to `zero` for every member, wrapped in an `init`. Thus the definition for
-`zero` for the type `Point` from above will end up looking like this:
+`make-deriver` は関数定義のように読むと理解しやすいです。ここではインタフェース名が `zero` で引数はありません。型が渡されたときに、そのメンバーそれぞれに `zero` を呼び出して `init` で包めば `zero` の定義になる、ということを表現しています。したがって `Point` 向けの `zero` は次のようになります。
 
 ```clojure
 (init (zero) (zero))
 ```
 
-`derive` itself will emit all the surrounding boilerplate, such that the entire
-call to `(derive Point zero)` will be rewritten to:
+`derive` 自身が周辺のボイラープレートを生成するため、`(derive Point zero)` の呼び出し全体は次のように展開されます。
 
 ```clojure
 (defmodule Point
@@ -108,6 +71,4 @@ call to `(derive Point zero)` will be rewritten to:
 )
 ```
 
-This means that all a deriver has to know is how to generate a function body
-when it’s given a type. Since it also has control over the argument names, it
-can use the arguments in its definition as well.
+つまり `deriver` が知っておくべきことは、型が与えられたときにどのような関数本体を生成するかだけです。引数名も制御できるため、必要に応じて生成するコードの中で活用できます。

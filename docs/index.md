@@ -1,29 +1,29 @@
-# Help index
+# ヘルプ索引
 
-Please start by reading the [Manual](Manual.md)
+まずは [マニュアル](Manual.md) から読み始めてください。
 
-You may find yourself coming back to 
+以下の資料には何度も戻ってくることになるでしょう。
 
-* [the description of the Carp language](LanguageGuide.md) 
-* [its libraries.](Libraries.md)
+* [Carp 言語の説明](LanguageGuide.md)
+* [同梱ライブラリ](Libraries.md)
 
-Also there is documentation about:
+そのほか、次のトピックについてのドキュメントもあります。
 
-* [C Interop](CInterop.md); 
-* [how to contribute](Contributing.md);
-* [support for implementig interfaces for datatypes based on their members](Derive.md); 
-* [custom resource deallocation](Drop.md); 
-* [where we are going with Carps dynamic evaluator](DynamicSemantics.md); 
-* [programming embedded devices](Embedded.md); 
-* [formatted output with (fmt) and (fstr)](Format_Strings.md); 
-* [hacking the compiler itself](hacking.md); 
-* [working with the REPL](HowToRunCode.md); 
-* [how to install and set up Carp](Install.md); 
-* [working with Macros](Macros.md); 
-* [Memory Management](Memory.md); 
-* [an invitation to use Carp for sound and graphics](Multimedia.md); 
-* [common patterns in Carp programs](patterns.md); 
-* [using quasi-quotation in macros and dynamic functions](Quasiquotation.md); 
-* [things to remember for each new Carp release](ReleaseChecklist.md); 
-* [some clarification on the terminology we use to explain things](Terminology.md); 
-* [editor support and tooling](Tooling.md).
+* [C との相互運用](CInterop.md)
+* [コントリビュート方法](Contributing.md)
+* [メンバー構造に基づいたデータ型へのインタフェース実装支援](Derive.md)
+* [リソースのカスタム解放処理](Drop.md)
+* [Carp の動的評価器の方向性](DynamicSemantics.md)
+* [組み込みデバイス向けプログラミング](Embedded.md)
+* [(fmt) と (fstr) を使った整形出力](Format_Strings.md)
+* [コンパイラそのもののハック](hacking.md)
+* [REPL の使い方](HowToRunCode.md)
+* [Carp のインストールとセットアップ](Install.md)
+* [マクロの活用](Macros.md)
+* [メモリ管理](Memory.md)
+* [Carp でのサウンドとグラフィックス入門](Multimedia.md)
+* [Carp プログラムでよく使うパターン](patterns.md)
+* [マクロや動的関数での準クォートの利用](Quasiquotation.md)
+* [各リリース時に注意しておくべき事項](ReleaseChecklist.md)
+* [用語の整理](Terminology.md)
+* [エディタ連携とツール類](Tooling.md)

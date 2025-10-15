@@ -1,27 +1,19 @@
-# Carp Patterns
+# Carp のパターン集
 
-This doc captures some common programming patterns in Carp.
+このドキュメントでは Carp でよく登場するプログラミングパターンを紹介します。
 
 ## Ref-let
 
-You may occasionally want to compute the result of running two different
-ownership-taking functions on a non-ref argument from an enclosing scope.
-Consider the following function:
+スコープ内の非参照引数に対して、所有権を奪うタイプの関数を 2 回適用したいことがあります。次の関数を考えてみましょう。
 
 ```clojure
 (defn needs-ref-let [x]
   (Pair.init (Maybe.or-zero x) (Maybe.or-zero x)))
 ```
 
-Carp will complain about this function since `Maybe.or-zero` *takes ownership*
-of the non-ref, managed argument `x`<sup>1</sup> -- this is nice since it ensures we
-don't somehow mutate the memory associated with `x` -- if we did, we would get
-unpredictable results, especially in multi-threaded contexts in which
-`Maybe.or-zero` may try to access `x` simultaneously.
+`Maybe.or-zero` は参照でない管理対象引数 `x` の所有権を取得するため、上記のコードはコンパイルエラーになります。これは `x` に紐づくメモリの破壊的変更を防ぎ、多重スレッド環境で `Maybe.or-zero` が同時に `x` へアクセスするような状況でも安全性を保つためです。
 
-But you may still want to compute both `Maybe.or-zero` calls on the single `x`
-value!  For these cases, it's useful to introduce a variable bound to a `Ref`
-to `x`:
+それでも単一の `x` に対して 2 回 `Maybe.or-zero` を実行したい場合があります。そのような場合は、`x` の参照を束縛して使い回すのが便利です。
 
 ```clojure
 (defn needs-ref-let [x]
@@ -29,10 +21,7 @@ to `x`:
     (Pair.init (Maybe.or-zero @x*) (Maybe.or-zero @x*))))
 ```
 
-`x*`, which is just a reference to the `x` argument, allows you to flexibly
-copy `x` at will throughout the function body. Of course, the second copy here
-is actually unnecessary, since once we've copied `x` once, we're free to use `x`
-itself again:
+ここで `x*` は `x` の参照であり、関数本体の中で自由にコピーできます。実際には 2 回目のコピーは不要で、1 度コピーしたあとは元の `x` をそのまま使えます。
 
 ```clojure
 (defn needs-ref-let [x]
@@ -41,9 +30,4 @@ itself again:
 ```
 
 ---
-1: In Carp, sumtypes like `Maybe` are *managed* by the borrow checker. This
-means that Carp will ensure any memory associated with them has proper
-ownership and is deleted when they are no longer needed. Not all types are
-managed. `Int`, for example, is not a managed type, and so the issue described
-above won't be relevant for `Int` arguments. For more information see
-[docs/memory.md](Memory.md)
+1: Carp では `Maybe` のような合併型は借用チェッカの管理対象です。つまり、対応するメモリの所有権や解放タイミングを Carp が追跡します。すべての型が管理対象というわけではありません。例えば `Int` は管理対象ではないため、上記のような問題は発生しません。詳しくは [Memory.md](Memory.md) を参照してください。

@@ -1,9 +1,6 @@
-# Drop
+# `drop` インタフェース
 
-One of the “special” interfaces implementable by any type in Carp is `drop`,
-the signature of which is `(Fn [&a] ())`. It takes a reference to a type and
-is run before that type is deleted. This is meant for types that need special
-treatment before being deallocated, such as files that need to be closed.
+Carp の任意の型が実装できる「特殊な」インタフェースのひとつに `drop` があります。シグネチャは `(Fn [&a] ())` で、型への参照を受け取り、その値が破棄される直前に呼び出されます。ファイルのクローズのように解放時に特別な処理が必要な型で利用します。
 
 ```clojure
 (deftype A [])
@@ -19,5 +16,4 @@ treatment before being deallocated, such as files that need to be closed.
     ()))
 ```
 
-In the case above, `A.drop` will be  run and `Hi from drop` will be printed
-when the `let` scope ends.
+上記の例では、`let` のスコープを抜けるタイミングで `A.drop` が実行され、「Hi from drop」が出力されます。

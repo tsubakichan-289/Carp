@@ -1,133 +1,89 @@
-# Embedded
+# 組み込み開発
 
-Programming for embedded devices is a bit like living in the desert. Everything
-is scarce, you have to constantly ration, and you better stay out of the sun.
+組み込みデバイス向けのプログラミングは砂漠での生活に少し似ています。あらゆる資源が乏しく、常に配分を工夫し、炎天下を避ける必要があります。
 
-This document aims to be a guide for how to ration with Carp. To do that, we
-first have to identify what resource it is that we’re most concerned about: is
-it executable size? Do we have timing-critical code? Do we want to avoid
-allocations? Once you have an answer to those questions, this guide can help
-you get there.
+このドキュメントは、Carp で資源配分をどう最適化するかをまとめたガイドです。まずは何を最優先に節約したいのかを明らかにしましょう。実行ファイルのサイズでしょうか？ タイミングがシビアなコードでしょうか？ それとも動的確保を避けたいのでしょうか？ それらの問いに答えが出れば、このガイドが目的地までの道筋を示してくれます。
 
-Because Carp compiles to C, a lot of the same considerations, tricks, and
-reasoning apply to Carp. If you already know what flags you need to get the job
-done, great! Carp will probably work with them out of the box. Still, getting
-acquainted with the tools it provides might help you have an easier time
-getting productive.
+Carp は C にコンパイルされるため、多くの考慮事項やテクニック、思考法は C と共通です。すでに必要なコンパイラフラグが分かっているならそのまま使えますし、Carp はたいてい素直に応えてくれます。それでも、Carp が提供するツールを把握しておくと、作業効率がぐっと上がるはずです。
 
-## A picture is worth...
+## まずはイメージ
 
-Just to give you an idea of what is possible, here's a picture to whet your appetite:
+可能性を感じてもらうために、ちょっとした写真をどうぞ。
 <img src="carp_on_arduboy.jpg">
 
 
-## Fundamentals
+## 基礎知識
 
-In order to tame the compiler to do as you tell it to, a firm grasp on the
-configuration options it gives you is in order. This section aims to help you
-get an overview of what you can do to make your project compile.
+コンパイラを思いどおりに操るには、設定項目をしっかり把握しておく必要があります。この章では、プロジェクトをビルドする際に使える手段を概観します。
 
-### Compiler
+### コンパイラ設定
 
-There are a few dynamic functions for you to peruse to instruct the compiler.
-Here is a list of them:
+コンパイラを制御する動的関数がいくつか用意されています。主なものは次のとおりです。
 
 ```clojure
-; tells Carp what C compiler executable to use
+; 利用する C コンパイラを指定
 (Project.config "compiler" "mycompiler")
 
-; tells Carp to add this flag to the compiler invocation
+; コンパイラに追加で渡すフラグを指定
 (add-cflag "-myflag")
 
-; tells Carp to add this library flag to the compiler invocation
+; リンク時に渡すライブラリフラグを指定
 (add-lib "-mylibflag")
 
-; tells Carp to run pkg-config for the libs and cflags of a library
+; 指定したライブラリの cflags / libs を pkg-config で取得
 (add-pkg "mypkg")
 ```
 
-### Cross-compiling
+### クロスコンパイル
 
-On embedded systems it's quite usual to use cross-compilers. See the
-cross-compiling section of the Manual for details on how to use a
-cross-compiler.
+組み込み開発ではクロスコンパイラを使うのが一般的です。使用方法はマニュアルのクロスコンパイルの章を参照してください。
 
-### Compile-time conditional code
+### 条件付きコンパイル
 
-There are some macros to help you find out stuff about the host system you are
-compiling on.
-
-Here are a few helpful functions to get you started:
+コンパイルホストの情報を取得するためのマクロも用意されています。まずはホスト環境を調べる関数を見てみましょう。
 
 ```clojure
-; will return the host OS
+; ホスト OS を返す
 (host-os)
 
-; will return the host architecture bit width (e.g. 32 or 64 bit)
+; ホストのアーキテクチャ（32/64 など）を返す
 (host-bit-width)
 ```
 
-Most of the time you'll be interested in the target platform details
-instead.
+多くの場合は、ホストではなくターゲットプラットフォームの詳細が必要になるでしょう。
 
 ```clojure
-; will return the target architecture
+; ターゲットのアーキテクチャを返す
 (target-arch)
 
-; will return the target OS
+; ターゲット OS を返す
 (target-os)
 
-; will return the target ABI
+; ターゲット ABI を返す
 (target-abi)
-
 ```
 
-There're some macros for conditional code in `Macros.carp`. If your
-target doesn't have an underlying OS you'll probably want to roll your
-own macros for a `freestanding` target.
+条件付きコード用のマクロが `Macros.carp` にいくつか用意されています。ターゲットに OS が存在しない場合は、`freestanding` ターゲット向けに独自マクロを定義することになるかもしれません。
 
 
-### The Way Out
+### 切り札を使う
 
-Sometimes you have to do funky stuff like using your own linker scripts and
-other such tricks. If it comes to that, it’s often best to just instruct Carp
-to generate the C only, and deal with it yourself from there. This can be
-achieved by telling Carp to `--generate-only`.
+独自のリンカスクリプトを使うなど、かなり特殊な手順が必要になる場合もあります。その際は、Carp に C コードだけを生成させ、自分で後処理を行うのが近道かもしれません。`--generate-only` を指定すれば、その状態で止められます。
 
-Sometimes you will even have to exclude some files that are usually loaded by
-the prelude from loading at all and instead generating your own core load file.
-This can be done by using `--no-core`. You can then use [the default prelude as
-a template for your own](https://github.com/carp-lang/Carp/blob/master/core/Core.carp).
+場合によっては、プレリュードが通常読み込むファイルを除外し、自前のコアロードファイルを生成する必要も出てきます。`--no-core` を指定すれば実現できます。あとは[既定のプレリュード](https://github.com/carp-lang/Carp/blob/master/core/Core.carp)をテンプレートにして自分用に調整してください。
 
-## What to optimize for
+## 何を最適化するか
 
-### Binary size
+### バイナリサイズ
 
-Binary size is something that Carp does not optimizie for by default. You can
-usually shave off a fairly large amount of memory by using [Link Time
-Optimization (LTO)](https://wiki.debian.org/LTO) and telling your compiler to
-optimize for size (if you are using GCC or Clang, `(add-cflag "-Os")` will do
-the trick).
+Carp は標準ではバイナリサイズを最適化しませんが、[リンク時最適化 (LTO)](https://wiki.debian.org/LTO) や、コンパイラのサイズ最適化オプションを併用するとかなり削減できます（GCC/Clang であれば `(add-cflag "-Os")` が簡単です）。
 
-### Speed
+### 実行速度
 
-Often, speed is not as important as other factors might be. Still, using the
-highest optimization setting (often `-O3`, together with the Carp flag
-`--optimize`) might be appropriate if you need to squeeze out those extra
-milliseconds. This is of course not a catch-all: speed is usually more about
-how your code is structured than what the compiler does. If you avoid
-allocations, copies, and cache misses, that will probably do more for speed
-than optimizers ever could.
+多くの場合、速度よりも優先したい要素がありますが、どうしてもミリ秒単位まで詰めたいなら最適化フラグを最大にするのが手頃です（一般的には `-O3` と Carp の `--optimize`）。とはいえ、速度向上にはコードの書き方が大きく影響します。確保やコピー、キャッシュミスを避けるほうが、最適化フラグより効果的なことも多いでしょう。
 
-### Allocations
+### メモリ確保
 
-There are a few tricks for avoiding allocations. Literal strings are not
-allocated but embedded in the binary by default, and if you don’t have to touch
-them for a copy, this can be golden. Likewise, there are static arrays (using
-the literal `$[]`) which will avoid you having to allocate. Their size and
-structure must be known at compile-time, however.
+確保を避けるテクニックもいくつかあります。リテラル文字列は標準でバイナリに埋め込まれ、コピーしない限り確保は発生しません。同様に、リテラルの静的配列（`$[]`）を使えば確保を回避できますが、サイズと構造はコンパイル時に確定していなければなりません。
 
-To log memory allocations during development and debugging, pass `--log-memory`
-to the Carp compiler and put the form `(Debug.log-memory-balance! true)` at the
-beginning of your program. This will log all allocations for you, helping you
-track down any stray allocations that might happen without your knowledge.
+開発・デバッグ中にメモリ確保をログしたい場合は、Carp コンパイラに `--log-memory` を渡し、プログラムの冒頭で `(Debug.log-memory-balance! true)` を呼びます。これで、どこで確保が発生しているかを追跡でき、意図せぬ確保の洗い出しに役立ちます。

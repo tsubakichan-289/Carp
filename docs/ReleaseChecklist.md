@@ -1,31 +1,31 @@
-# Release Checklist
+# リリースチェックリスト
 
-Do all of these things (somewhat) in order:
+以下の手順をおおむね順番に実施します。
 
-## 1. Update Cabal project version
+## 1. Cabal プロジェクトのバージョン更新
 
-See the second line of the file [CarpHask.cabal](../CarpHask.cabal).
+[CarpHask.cabal](../CarpHask.cabal) の 2 行目を更新します。
 
-## 2. Update the "Welcome to Carp X.Y.Z" REPL message
+## 2. REPL の「Welcome to Carp X.Y.Z」メッセージ更新
 
-See [Main.hs](../App/Main.hs).
+[Main.hs](../App/Main.hs) を編集します。
 
-## 3. Update the blurb in README.md
+## 3. README の冒頭文を更新
 
-See [README.md](../README.md)
+[README.md](../README.md) を参照してください。
 
-## 4. Update the changelog
+## 4. 変更履歴の更新
 
-See [CHANGELOG.md](../CHANGELOG.md)
+[CHANGELOG.md](../CHANGELOG.md) を更新します。
 
-## 5. Make a commit on master
+## 5. master でコミットを作成
 
 ```bash
 $ git add .
 $ git commit -m "build: Release X.Y.Z"
 ```
 
-## 6. Tag the commit and push it
+## 6. タグを付けてプッシュ
 
 ```bash
 $ git tag vX.Y.Z

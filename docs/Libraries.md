@@ -1,79 +1,71 @@
-## Working with libraries and modules
+## ライブラリとモジュールの扱い
 
-Carp comes with a standard library called Core, sources are [here](../core/). 
-It consists of a number of modules.
-Documentation is available [online](http://carp-lang.github.io/carp-docs/core/core_index.html) as well as [locally](./core/core_index.html) for most of them.
-The majority of modules are loaded by default, see [Core.carp](../core/Core.carp) for details. 
-If your `CARP_DIR` environment variable is set up [properly](Install.md#setting-the-carp_dir), then the remaining libraries can easily be imported using the `load` command. For example, to get access to the Bench module, do the following:
+Carp には Core という標準ライブラリが付属しており、ソースコードは[こちら](../core/)にあります。複数のモジュールで構成されており、多くは[オンライン](http://carp-lang.github.io/carp-docs/core/core_index.html)および[ローカル](./core/core_index.html)の両方でドキュメントを参照できます。ほとんどのモジュールはデフォルトで読み込まれます。詳細は [Core.carp](../core/Core.carp) を参照してください。
+
+`CARP_DIR` 環境変数を[適切に設定](Install.md#carp_dir-の設定)していれば、残りのライブラリは `load` コマンドで簡単に読み込めます。たとえば Bench モジュールを使う場合は次のとおりです。
 
 ```clojure
 (load "Bench.carp")
 ```
 
-Using the functions in the Bench module still requires pre-pending them with the module name, i.e. `(Bench.bench fib)`. To avoid that, also do `(use Bench)`.
+Bench モジュールの関数を呼ぶ際はモジュール名を付けて `(Bench.bench fib)` のように記述します。これを避けたい場合は `(use Bench)` も合わせて実行してください。
 
-To see what functions a certain module contains, use the `info` command:
+モジュールに含まれる関数を調べるには `info` コマンドを使います。
 
 ```clojure
 (info Bench)
 ```
 
-External librares can be loaded by using their relative or absolute location in your file system as the path. To make a library publically available in a more general way you can add it to your Carp project's search path:s (found by running `:p` in the repl). For instance, here's how you would add the NCurses library so that it can be loaded with just `(load "NCurses.carp")`.
+外部ライブラリを読み込む際は、ファイルシステム上のパスを相対／絶対で指定できます。より汎用的に使えるようにするには、Carp プロジェクトの検索パス（REPL で `:p` を実行すると確認できます）へ追加します。たとえば NCurses ライブラリを `(load "NCurses.carp")` で読み込めるようにするには次の設定を行います。
 
 ```clojure
 (Project.config "search-path" "~/Projects/carp-ncurses")
 ```
 
-This line of configuration can be put into [profile.carp](Manual.md#Profile-settings) to make it apply in all your projects.
+この設定行を [profile.carp](Manual.md#profilesettings) に記述しておけば、すべてのプロジェクトで有効になります。
 
-## Loading via git
+## Git 経由で読み込む
 
-You can also load libraries via Git like that:
+ライブラリは Git から直接読み込むこともできます。
 
 ```clojure
 (load "git@github.com:hellerve/anima.carp@master")
 ```
 
-This will download the [Anima](https://github.com/hellerve/anima) library to
-`~/.carp/libs/<library>/<tag>` and load the file `anima.carp` in it. To get a
-stable version of the library you should specify a git tag rather than
-`@master`.
+すると [Anima](https://github.com/hellerve/anima) ライブラリが `~/.carp/libs/<library>/<tag>` にダウンロードされ、`anima.carp` が読み込まれます。安定版を利用したい場合は `@master` ではなくタグを指定してください。
 
-If you want to make a library ready for loading, either prepare a file that has the same name
-as the library—in the case above, `anima.carp`—or a file called `main.carp` as
-an entrypoint.
+ライブラリを読み込めるようにするには、ライブラリ名と同じファイル（上記の例では `anima.carp`）か `main.carp` を用意してエントリポイントにしてください。
 
-Please note that for private repos only loading through SSH is supported. For public repos you can use HTTPS:
+非公開リポジトリでは SSH 経由の読み込みのみサポートされています。公開リポジトリなら HTTPS も利用できます。
 
 ```clojure
 (load "https://github.com/hellerve/anima@master")
 ```
 
-## Documentation
+## ドキュメント生成
 
-You can generate HTML documentation for a set of modules by running `save-docs` in the REPL:
+REPL で `save-docs` を実行すると、指定したモジュールの HTML ドキュメントを生成できます。
 
 ```clojure
 > (save-docs Int Float String)
 ```
-See the [ReadMe](./core/README.md) for updating the entire standard library documentation or
-the [program](./core/generate_core_docs.carp) for examples of how to configure the documentation generator.
 
+標準ライブラリ全体のドキュメントを更新する手順は [core/README.md](./core/README.md) に、ドキュメントジェネレーターの設定例は [generate_core_docs.carp](./core/generate_core_docs.carp) に記載されています。
 
-## Auto generated API documentation
+## 自動生成された API ドキュメント
 
-* [online docu for Carp standard library](http://carp-lang.github.io/carp-docs/core/core_index.html)
-* [local  docu for Carp standard library](./core/core_index.html)
-* [SDL](http://carp-lang.github.io/carp-docs/sdl/SDL_index.html)
+* [オンライン版標準ライブラリドキュメント](http://carp-lang.github.io/carp-docs/core/core_index.html)
+* [ローカル版標準ライブラリドキュメント](./core/core_index.html)
+* [SDL ライブラリドキュメント](http://carp-lang.github.io/carp-docs/sdl/SDL_index.html)
 
-## Some External Libraries
-* [Anima](https://github.com/hellerve/anima) (A simple drawing and animation framework)
-* [Stdint](https://github.com/hellerve/stdint) (A wrapper around the types defined in stdint.h)
-* [Socket](https://github.com/hellerve/socket) (A wrapper around C sockets)
-* [Physics](https://github.com/hellerve/physics) (A port of phys.js)
-* [NCurses](https://github.com/eriksvedang/carp-ncurses) ([https://www.gnu.org/software/ncurses/](https://www.gnu.org/software/ncurses/))
-* [Curl](https://github.com/eriksvedang/carp-curl) (Simple bindings to the Curl library)
+## 外部ライブラリの例
+* [Anima](https://github.com/hellerve/anima) — シンプルな描画・アニメーションフレームワーク
+* [Stdint](https://github.com/hellerve/stdint) — `stdint.h` で定義された型のラッパー
+* [Socket](https://github.com/hellerve/socket) — C ソケットのラッパー
+* [Physics](https://github.com/hellerve/physics) — phys.js の移植
+* [NCurses](https://github.com/eriksvedang/carp-ncurses) — [ncurses](https://www.gnu.org/software/ncurses/)
+* [Curl](https://github.com/eriksvedang/carp-curl) — Curl ライブラリへのシンプルなバインディング
 
-For a growing list of Carp packages, see [Carpentry](https://github.com/carpentry-org).
+Carp のパッケージ一覧は [Carpentry](https://github.com/carpentry-org) を参照してください。
 
-Do you have a library that you want to plug here? Pleas make a PR!
+あなたのライブラリも紹介したいですか？ ぜひ PR を送ってください！

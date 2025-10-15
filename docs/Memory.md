@@ -1,76 +1,41 @@
-# Memory Management - a closer look
+# メモリ管理を詳しく見る
 
-Carp uses a *linear type system* to manage the memory associated with different
-values throughout a program. Carp's memory management system is designed and
-implemented with the following goals in mind: 
+Carp は *線形型システム* を用いて、プログラム中のさまざまな値に紐づくメモリを管理します。この仕組みは次の目標を念頭に設計・実装されています。
 
-* Predictable: The memory management system's behavior should be easy to reason
-  about.
-* Efficient: The memory management system should not have significant impacts
-  on performance.
-* Safe: The memory management system should prevent errors related to memory
-  management, such as "use after free" and "double free"
+* **予測可能性**: 振る舞いが分かりやすく、推論しやすいこと。
+* **効率性**: 実行速度に大きな悪影響を与えないこと。
+* **安全性**: 「解放済みメモリの使用」や「二重解放」といったメモリ管理上の典型的なバグを防ぐこと。
 
-This document introduces the basic concepts behind the kind of linear type
-system Carp uses. In addition, it takes a deeper look at how the system is
-currently implemented.
+本書では Carp の線形型システムが備える基本概念と、実装の概要を紹介します。
 
-## Linear Types and Memory Management
+## 線形型とメモリ管理
 
-Carp's linear type system tracks the *ownership* of the memory associated with a
-given value as part of its type signature. A *linear type* is a traditional type
-with additional information called a *lifetime* that allows the type system to
-track a value's association with a given memory location.
+Carp の線形型システムは、型シグネチャの一部として値に紐づくメモリの *所有権* を追跡します。いわゆる *線形型* とは、従来の型に *ライフタイム* と呼ばれる追加情報が付いたものです。ライフタイムによって、型システムは値がどのメモリ領域に紐づいているかを把握できます。
 
-The memory management system *only* manages linear types; not all types are
-linear. Some of Carp's builtin types are linear by default:
+メモリ管理システムが扱うのは線形型だけです。すべての型が線形であるわけではありません。Carp の組み込み型のうち、以下はデフォルトで線形です。
 
-- The String type is linear and managed by the memory system.
-- The Pattern type is linear and managed by the memory system.
-- The Array type is linear and managed by the memory system.
-- The Box type is linear and managed by the memory system.
-- Function types are linear and managed by the memory system.
+- `String`
+- `Pattern`
+- `Array`
+- `Box`
+- 関数型
 
-All other builtin types are *not* linear, and thus aren't managed by the memory
-system.
+その他の組み込み型は線形ではなく、メモリ管理システムの対象外です。
 
-A few conditions determine whether or not a user defined type is linear:
+ユーザ定義型が線形と見なされるかどうかは次の条件で決まります。
 
-- **Implementation of the `blit` interface**: this interface explicitly marks a
-  type as *non-linear*. Any type that implements it is ignored by the memory
-  management system and is assumed to pose no risks in relation to memory
-  allocation and deallocation.
-- **Implementation of the `delete` interface**: this interface explicitly marks
-  a type as *linear*. Any type that implements it is managed by the memory
-  management system. Carp will call the implementation of this interface whenever
-  the memory management system decides it's safe to deallocate the memory
-  associated with a value of the type that implements this interface. 
+- **`blit` インタフェースを実装している場合**: その型は明示的に「非線形」として扱われ、メモリ管理システムの対象外となります。割り当て・解放にまつわるリスクがないと判断されます。
+- **`delete` インタフェースを実装している場合**: その型は「線形」であると認識され、メモリ管理システムが管理します。型に紐づく値のメモリを安全に解放できると判断されたタイミングで `delete` が呼ばれます。
 
-When you define a type directly in Carp code, using `deftype` Carp will
-*automatically implement the delete interface for you*. As a consequence, any
-type that you declare using `deftype` will be managed by the memory management
-system. In the most cases, this automatic management of user defined types is
-beneficial. You can always redefine `delete` for your type if you need to write
-a custom memory deallocation routine. However, if you need to define a type
-that requires fine-grained control over its memory deallocation, it might be
-better to define both the type and its deallocation routines in C, and register
-them in Carp.
+`deftype` で型を定義すると、Carp は自動的に `delete` インタフェースを実装します。つまり `deftype` で作成した型は基本的にメモリ管理システムが面倒を見ます。多くの場合、この挙動は望ましいものです。必要であれば `delete` を再実装してカスタム解放処理を記述できます。ただし、より細かい制御が必要なら、型と解放処理を C 側で実装し Carp に登録するほうが適しているかもしれません。
 
-The same conditions hold for [registered types][3] as well. If you register an
-external type defined in C, Carp won't manage it unless you provide an
-implementation of `delete` for the corresponding Carp type. See the [C interop
-documentation][3] for more information.
+[C インタロップ](./CInterop.md) で登録した型についても同様の条件が適用されます。C で定義した外部型を登録しただけでは Carp 側の管理対象にならず、`delete` 実装を提供して初めて管理されます。詳しくは上記ドキュメントを参照してください。
 
-In the following sections, we'll explore a few key memory system operations.
-Along the way, we'll present examples using Carp's builtin linear String type
-to illustrate how the system manages values of linear types.
+以下では、線形型の代表として組み込みの `String` を例に挙げながら、メモリ管理システムの主要な操作を順に見ていきます。
 
-## Bindings, Ownership, and Lexical Scopes
+## 束縛・所有権・レキシカルスコープ
 
-Unless your program is incredibly short, you'll likely have one or more
-*bindings* that associate names with values in your program. Typically, we can
-assign the value of one binding to another. Consider the following local
-variables in a let form: 
+プログラムがある程度の規模になると、名前と値を結び付ける *束縛*（バインディング）が複数登場します。一般的には、ある束縛の値を別の束縛へ代入できます。次の `let` 式を例に見てみましょう。
 
 ```clojure
 (let [x 1
@@ -79,315 +44,130 @@ variables in a let form:
   x)
 ```
 
-In the example above, we assign the non-linear value *1* to `x`, then assign the
-value of `x` to `y`, then assign the value of `x` to `z`.
+非線形な値 `1` を `x` に束縛し、それを `y` や `z` に代入しています。
 
-In Carp, linear values are treated differently. When we assign a linear value to
-a binding, such as a local variable name, the *memory location* associated with
-the value is also bound to the name. This changes the rules about how we can
-assign values and pass them around a program. If we try to write the same
-program as we did above, using a value of the linear type, `String`, we get
-quite a different result:
+Carp では線形値は異なる扱いになります。線形値を束縛（ローカル変数など）に代入すると、値に結び付いた *メモリの所在* もその名前に紐づきます。そのため、値の代入や受け渡しに関するルールが変わってきます。先ほどと同じことを線形型 `String` で行うとどうなるでしょうか。
 
 ```clojure
-;; Don't worry about the @ before the string literal. We'll explain it soon.
 (let [string @"linear types!"
-      other-string string ;; used here!
-      yet-another-string string] ;; and here!
-  string) ;; and again here!
+      other-string string ;; ここで使用！
+      yet-another-string string] ;; ここでも！
+  string) ;; さらにここでも！
 ```
 
-If you try to pass this program to the Carp compiler, you'll get an error in
-return: `You’re using a given-away value string`.
+このコードを Carp コンパイラに渡すと `You’re using a given-away value string` というエラーが返ってきます。
 
-This illustrates the 'golden rule' that the memory management system enforces:
-**every linear value can only be used once**. When we first assign `@"linear
-types!"` to the variable `string`, we've already used it once. When we attempt
-to assign `string` to `other-string` *and* `yet-another-string`, the memory
-management system will detect that we're attempting to use the single value
-`@"linear types!"` multiple times, which it won't allow. Note that *only*
-assigning the value to string, then `string` to `other-string` is OK, as long as
-we return `other-string`—we'll explain why in a later section.
+これがメモリ管理システムが守る「黄金律」です。**線形値は各レキシカルスコープで一度しか利用できません**。`@"linear types!"` を `string` に束縛した時点で一度使用した扱いになり、その後 `string` を複数の場所で使用しようとする（`other-string` や `yet-another-string` に代入する、戻り値として返すなど）とエラーになります。ただし `string` を `other-string` へ代入し、戻り値として `other-string` を返すといったケースは許容されます。理由は後ほど説明します。
 
-In casual terminology, this concept is called *ownership*. The binding to which
-the linear value is assigned *owns* its associated memory. We can call such a
-binding the value's *owner*. In this example, `string` is the initial owner of
-the memory allocated for the linear value `@"linear types!"`.
+一般的な言い方をすると、これは *所有権* の概念です。線形値を束縛したブロック（今回であれば `string`）がそのメモリの所有者になります。各束縛はレキシカルスコープを持ち、そのスコープ内でのみ適切に利用できます。
 
-Every binding in Carp has a *lexical scope* that determines where in the program
-the binding name is defined and can be validly referenced. The lexical scope of
-`string` in our example happens to be our let form. The lexical scope of a
-function parameter is only the body of the function.
-
-A linear value can only be used *once* in a single *lexical scope*. We "use" a
-linear value whenever we *pass it to a different lexical scope*. For example, we
-"use" `string`, if we return it:
+線形値は、同じレキシカルスコープ内で *別のスコープへ渡すたびに* 利用済みと見なされます。たとえば戻り値として返す場合や、別の関数に渡す場合がこれに該当します。
 
 ```clojure
 (let [string @"linear types!"]
-  string) ;; used here!
+  string) ;; ここで使用！
 ```
-
-We also use it when we pass it to another function:
 
 ```clojure
 (let [string @"linear types!"]
-  (do (reverse string) ;; used here!
-      ())) 
+  (do (reverse string) ;; ここで使用！
+      ()))
 ```
 
-What do both of these cases have in common? They raise the possibility that
-`string`'s value (and it's assocaited memory) is passed to *another binding*
-(when we pass it to a function, it's rebound to the function parameter; when we
-return it, the caller might bind it to a new name in the lexical scope that
-contains our let). As we'll see later, these are two particular examples of a
-specific form of an operation we'll call *moving*. Binding the value of an
-existing linear binding, as in `(let [string @"linear types!" other-string
-string] ()))` is also a case of moving.
+いずれのケースでも、`string` に結び付いたメモリが別の束縛へ移動する可能性があります。これが後述する「ムーブ（所有権の移動）」です。
 
-### Safe Deallocations
+### 安全な解放
 
-The "use once" restriction is the mechanism that allows the memory management
-system to prevent classical memory errors such as "use after free" and "double
-free". Enforcing that a linear value is only used *once* in any lexical scope,
-allows the management system to determine precisely when a binding's associated
-memory can be freed.
+「一度きりの利用」制約が、`use-after-free` や `double free` といった古典的バグを防止します。線形値が各スコープで一度しか使用されないよう管理することで、どのタイミングでメモリを解放できるかを正確に判断できます。所有者のスコープで再利用されないと判断された時点で、自動的に `delete` 実装が呼び出されます。
 
-When the memory management system determines some linear value will no longer be
-used in the lexical scope of it's *owner*, it automatically calls the
-corresponding linear type's `delete` implementation to free the associated
-memory.
+## ムーブ、借用、コピー
 
-Now that we have an initial sense about the restrictions the memory management
-system enforces around our use of linear values, we'll explore a few operations
-the system performs that allow us to have greater flexibility.
+線形型システムの振る舞いは大きく「ムーブ」「借用」「コピー」の 3 つに整理できます。以下ではこれらを順に見ていきます。
 
-## Moving, Borrowing, and Copying
+### ムーブ ― 所有権の移動
 
-At a high level, the functionality of the linear type system can be organized
-into three primary operations: *moving*, *borrowing*, and *copying*. These are
-casual, intuitive terms for what the system does with linear values as it
-manages them across your program. We'll explore precise technical terminology
-for each of these operations later on.
-
-### Moving: Transferring Ownership
-
-The memory management system ensures that only one binding ever owns the memory
-associated with a given linear value. As a result, unlike non-linear values,
-the compiler won't let you bind the same linear value to more than one
-variable. Instead, when you reassign a linear value to another variable, The
-old binding is invalidated, as we saw earlier:
+線形値に紐づくメモリを所有できるのは常に 1 つの束縛だけです。そのため、同じ線形値を複数の変数へ同時に代入することはできません。代わりに、既存の束縛から別の束縛へ代入すると *所有権の移動*（ムーブ）が発生し、元の束縛は無効化されます。
 
 ```clojure
 (let [string @"linear types!"
       other-string string
-      yet-another-string string] ;; error here!
-  ()) 
+      yet-another-string string] ;; ここでエラー！
+  ())
 ```
 
-In the prior example, the binding `string` is invalidated as soon as we assign
-it to the binding `other-string`. The memory associated with `string` is now
-associated with the binding `other-string`, and `other-string` is the linear
-string's new owner. This process is called a *transfer of ownership*, or
-*moving*.
+上の例では `string` を `other-string` に代入した時点で `string` は使えなくなります。メモリの所有者は `other-string` に移ります。この操作を「ムーブ」と呼びます。
 
-If we were to move our value across a number of bindings in sequence, we'd fix
-our problem! There's no issue with moving some linear value across different
-bindings in a lexical scope, there's only an issue if we attempt to move a value
-out of *the same binding* more than once:
+同じスコープ内でも、束縛を順に移動させれば問題ありません。重要なのは、**同一束縛からのムーブは 1 度だけ** というルールです。
 
 ```clojure
-(let [string @"linear types!"          ;; linear string value here.
-      other-string string              ;; moved over to this binding
-      yet-another-string other-string] ;; still ok, moved to this binding
-  ()) 
+(let [string @"linear types!"
+      other-string string
+      yet-another-string other-string]
+  ())
 ```
 
-The important, and only rule about moving linear values is: *you can only move a
-linear value from an individual binding __once__* in any given lexical scope. If
-your code attempts to move a linear value from a binding more than once, the
-memory management system will chastise you!
+### スコープをまたぐムーブ
 
-#### Moving to a New Scope
-
-Just as we transferred ownership of a linear value to another binding in the
-same lexical scope, we can use ownership transfers to move a linear value into
-a binding *beyond* its lexical scope. Consider this next example:
+ムーブの対象は同じスコープ内に限りません。戻り値として返す場合もムーブが発生します。
 
 ```clojure
 (let [string @"linear moves!"]
   string)
 ```
- 
-Though it's not as obvious, a move is happening here! In this case, a transfer
-of ownership occurs across lexical scope boundaries. The linear string
-associated with `string` and its corresponding memory are returned from the let
-form. If the result of this let form is bound to some other variable, that new
-binding will receive ownership of the linear string. Thus, the lifetimes of
-linear values are not only limited to their lexical scopes. We can move linear
-values in and out of other scopes, and the memory management system will
-determine in which part of our code the value can be safely deallocated.
 
-Again, since returning the value is a *move*, or ownership transfer, the same
-rules around moves apply: we can only make *one* move out of a given binding in
-a single lexical scope:
+この例でも所有権が呼び出し元へ移動します。同様に、関数へ引数として渡す場合もムーブです。
 
 ```clojure
 (let [string @"linear moves!"
-      other-string string] ;; ok; first move out of string
-  string) ;; error! Second move out of string
-```
-
-Passing a linear value as an argument to a function is another example of a move
-across lexical scopes. For instance, consider the following example:
-
-```clojure
-(let [string @"linear moves!"
-      reversed (reverse string)] ;; moved here!
+      reversed (reverse string)]
   reversed)
 ```
 
-In this example, we *move* the linear value associated with `string` into the
-function's lexical scope, binding it to whatever parameter name the function
-declaration used for its first argument. Since we only moved the value out of
-`string` once, the memory management system happily accepts this program.
+ここでは `string` の値を `reverse` の引数へ渡した時点で所有権が移動しています。
 
-#### Beyond Moves
+### 借用 ― 一時的な参照
 
-In some cases, transferring ownership might be too limiting. Let's reconsider
-the earlier example, in which we tried to transfer ownership from `string` more
-than once:
+複数回利用したいからと言って、同じ束縛から 2 度ムーブするとエラーになるのは先ほど見たとおりです。
 
 ```clojure
 (let [string @"linear moves!"
       other-string string
-      yet-another-string string] ;; error!
+      yet-another-string string] ;; エラー！
   ())
 ```
 
-We might want to write "multi-move" code like this, but under the current rules
-of the linear type system, we can't. Luckily, there's a way out: references. 
-
-### Borrowing: Lending Ownership
-
-As we explored in the previous section, we can’t assign a linear value to
-multiple bindings without transferring ownership. If we move a value from one
-binding to another, we can only do so once, even if one of those moves transfers
-ownership beyond the current scope. At any given point in a lexical scope, only
-one binding can ever own the linear value.
-
-This restriction ensures the type system knows exactly when to deallocate the
-memory associated with a linear value, but it can be a bit limiting. For
-example, what if we wanted to process the value using a function, then use our
-original value afterwards?
-
-```clojure
-(let [string @"linear borrow!"
-      reversed (reverse string)]
-  (concatenate string reversed)) ;; error!
-```
-
-This short let block calls some imaginary functions to first reverse our linear
-string, then join it with itself, returning the result. However there’s a big
-problem here, once we move our string to `reverse`'s parameter the memory
-management system won’t let us use it in `concatenate` since it violates the
-"one move" rule.
-
-This time, the rule has put us in quite a difficult situation. We want to write
-a program that uses `string` twice, but there's no way for us to use it twice
-directly, thanks to the linear type system rules. Just passing `string` along to
-other bindings won't help us here either.
-
-Luckily, there’s a mechanism that allows us to reuse `string` more than once in
-our let block: *references*.
-
-References are another special type that the memory management system
-understands how to work with. References are *not* linear types, but they give
-us another way of working with linear types that allows us to get around the
-type system’s “one owner” and "one move" restriction safely.
-
-A reference value points to some linear value, but because the reference is not
-linear value itself, but rather a new, non-linear value, we’re allowed to pass
-them around freely, just like we can with other non-linear values. Assigning a
-reference to a linear value to some binding is called *borrowing*. Instead of
-transferring ownership of a linear value to a new binding, we’re giving it a
-temporary way to access the value, without taking it over and moving it.
-
-Use the `&` operator, or `ref` special form, to create a reference:
+しかし、同じ値を複数回処理したいケースは多々あります。そこで役に立つのが *借用*（参照）です。線形値への参照は線形ではないため、通常の値と同じように渡せます。所有権を移動させるのではなく、一時的にアクセスを許可するイメージです。参照は `&`（または `ref`）で生成します。
 
 ```clojure
 (let [string @"hello, linear world!"
-      reversed (reverse &string)] ;; reference to string
-  (concatenate string reversed) ;; ok; first move of string
+      reversed (reverse &string)]
+  (concatenate string reversed))
 ```
 
-Using references, we can get our initial string reversal and concatenation
-program to work, the memory manager won’t complain. Since `string` is *borrowed*
-by `reverse`, using a reference, there’s no longer an issue using it directly in
-`concatenate` since this is now the one and only time it transfers ownership
-(moves).
+`reverse` に渡しているのは `string` の参照なので、`string` 自体はまだムーブされていません。これにより、後段の `concatenate` で所有権を移動させることができます。
 
-In this case, we have no idea how `reverse` actually uses the reference to
-produce a reversed string, but we’ve followed the memory management system’s
-rules correctly. In the next section, we'll explore how we can actually make use
-of the reference in an implementation of a function like reverse.
+### コピー ― 値を複製する
 
-### Copying: Increasing Supply
+参照を受け取った関数内部では、どう使えばよいでしょうか。通常、参照に対して許されるのは *コピー* です。参照をコピーすると、参照先の線形値を複製した新たな線形値が得られます。複製元とは独立した所有者を持ち、メモリ管理システムが適切なタイミングで解放します。
 
-Now that we’ve explored references and borrowing, you might wonder what we can
-do with references. Again, references are not linear values themselves, but
-they “point” to linear values. Their behaviors and relation to the type system
-differ. So, what can we accomplish with references?
-
-In Carp, references, in general, (but we'll see that there are some special
-cases) support only a single operation, called *copying*. Copying a reference
-creates a new linear value that *duplicates* the linear value the reference is
-pointing to. This new linear value is completely distinct from the original
-linear value the reference points to. It has its own owner, and, just like other
-linear values, the memory management system will determine when to remove it. 
-
-Copying allows us to work with some linear value in multiple places in a safe
-way. To copy the value pointed to by a reference, use the `@` operator. The
-following example shows how the `reverse` function might be implemented:
+参照の値をコピーするには `@` を使います。`reverse` 関数を次のように実装できるでしょう。
 
 ```clojure
 (defn reverse [string-ref]
-  (reverse-internal @string-ref)) ;; reference copied here!
+  (reverse-internal @string-ref))
 ```
 
-The function takes a reference to a linear string value, makes a copy of it,
-reverses the copy, then returns the resulting linear value to the caller. Note
-that we haven’t touched the original linear string pointed to by the
-`string-ref` reference, we only work with a copy!
+`string-ref` が指す文字列をコピーし、そのコピーを反転させて返しています。元の値には触れていません。
 
-We can also now understand the general string literal syntax we've used
-throughout this text: 
+ここで、文字列リテラル記法 `@"..."` の意味も明らかになります。リテラルは参照として扱われ、バインドされる際にコピーされるのです。
 
-```clojure
-string @"hello, linear world!"
-```
+## 実際的な指針
 
-This binds a *copy* of the string literal to the variable `string`. This
-reveals an important aspect of Carp’s builtin string literals: they are
-references! We’ll explore why this makes sense a bit later.
+関数の引数や戻り値がメモリ管理上どう扱われるのか知りたい場合は、関数の型を見るのが手っ取り早い方法です（現状は `(env)` などで確認できます）。戻り値や引数が `String` や `Vector3` のような「参照でない構造体型」であれば、所有権が移動する意味合いになります。一方、`(Ref String)` のような参照型であれば、一時的に貸し出されるだけで解放責任は呼び出し側にありません。既存の C コードと連携する場合は、Carp 側のデータ構造を参照やポインタ（`(Pointer.address <variable>)`）として渡し、メモリ管理を Carp 側に留めるのが妥当なことが多いでしょう。
 
-## Rule of thumb
+## 配列の扱い
 
-To know whether a function takes over the responsibility of freeing some memory
-(through its args) or generates some new memory that the caller has to handle
-(through the return value), just look at the type of the function (right now
-the easiest way to do that is with the `(env)` command). If the value is a
-non-referenced struct type like String, Vector3, or similar, it means that the
-memory ownership gets handed over. If it's a reference signature (i.e. `(Ref
-String)`), the memory is just temporarily lended out and someone else will make
-sure it gets deleted. When interoping with existing C code it's often correct
-to send your data structures to C as refs or pointers (using `(Pointer.address
-<variable>)`), keeping the memory management inside the Carp section of the
-program.
-
-## Working with arrays
-
-The most important thing in Carp is to process arrays of data. Here's an example of how that is supposed to look:
+Carp では配列データを処理することが非常に重要です。以下はその典型例です。
 
 ```clojure
 (defn weird-sum []
@@ -395,363 +175,6 @@ The most important thing in Carp is to process arrays of data. Here's an example
     (reduce add 0 &(endo-map square (filter even? stuff)))))
 ```
 
-All the array transforming functions 'endo-map' and 'filter' use C-style mutation of the array and return the same data structure back afterwards, no allocation or deallocation needed. The lifetime analyzer ("borrow checker" in [Rust][1] parlance) makes sure that the same data structure isn't used in several places.
+`endo-map` や `filter` のような配列変換関数は C のミュータブル操作を利用しており、元のデータ構造を再利用します。追加の確保や解放は必要ありません。ライフタイム解析器（Rust の「借用チェッカ」に相当）が同じデータ構造を複数箇所で同時に使っていないかを検証します。
 
-The restriction of 'endo-map' is that it must return an array of the same type as the input. If that's not possible, use 'copy-map' instead. It works like the normal 'map' found in other functional languages. The 'copy-' prefix is there to remind you of the fact that the function is allocating memory.
-
-To execute side-effects, use the `doall` macro:
-
-```
-(doall IO.println [@"Yo" @"Hola" @"Hej"])
-```
-
-Or `foreach` (works like a foreach loop construct in a lot of other programming languages):
-
-```
-(foreach [x &[1 2 3]]
-  (println* "x: " x))
-```
-
-
-## Under the Hood: The Implementation of Carp's Memory Management System
-
-This section explores the implementation of Carp's memory management system in
-greater technical detail. Most users won't need to read this, but if you'd like
-to have a deeper understanding of how the system works, you'll find an
-explanation in this section.
-
-### AST Info, Identifiers, and Deleters
-
-Like other portions the Carp compiler, the memory management system operates on
-the abstract syntax tree (AST) representation of the forms in your program. When
-the compiler compiles your code, it assigns addition *information objects*,
-called `Info`, to each form in your program; these objects are particularly
-important to the memory management system. Among other things, these `Info`
-objects contain unique identifiers for each form in your program. The memory
-management system uses these identifiers to keep track of memory as it moves
-across different parts of your code.
-
-In addition to identifiers, form information objects also contain `Deleters`.
-These are a special data structure used to hold information about the `delete`
-functions needed for each linear value in your program. One of the memory
-management system's main responsibilities is to assign and keep track of these
-deleters for each form in your program that makes use of a linear value.
-
-Essentially, as the memory management system examines your code, if it finds a
-form that uses a linear value that should be deleted at a certain point, it adds
-an appropriate deleter to the info object for the form. If the linear value is
-*moved* to some other part of your code, the memory management system will
-remove the corresponding deleter, which will be added to the form it's moved
-into later. 
-
-The key point to understand is that the memory management system primarily
-models the movements of linear values using the presence or absence of these
-deleter objects. When the compiler's code emission component encounters a form,
-if the form has an associated deleter, the emitter will produce a call to the
-deletion routine in the corresponding output C code.
-
-As we'll see in a moment, there are some further complications, but this is the
-basic approach taken by the memory management system.
-
-### Lifetimes
-
-The basic operation of the memory management system entails moving deleters
-across different Info objects for the forms in your program. As the system
-performs this task, it also has to account for the way *references* are used
-throughout your code, and how they relate to linear values. In order to track
-this, the memory management system uses *lifetimes* which determine whether or
-not a reference is valid in a given form.
-
-The following function provides an example of this reference validity tracking
-in action:
-
-```clojure
-(defn invalid-ref []
-  &[1 2 3])
-```
-
-In the prior example, our `invalid-ref` function returns a reference to the
-literal linear array value `[1 2 3]`. This code is problematic because the
-linear array value will be deleted at the end of the function, so the returned
-reference will point to nothing! The memory management system catches this for
-us and let's us know about the problem.
-
-Contrarily, the following code is perfectly fine:
-
-```clojure
-(def an-array [1 2 3])
-
-(defn valid-ref []
-  &an-array)
-```
-
-The `valid-ref` function also returns a reference, but this reference is valid
-since it points to a linear array value (`an-array`) that won't be deleted (it
-will still be "alive") by the time the function returns the reference.
-
-The system will also catch cases when we attempt to reference a linear value
-that's already been *moved* into a different location/binding:
-
-```clojure
-(defn unowned-ref []
-  (let [a [1 2 3]
-        b a 
-        c &a]
-  ()))
-```
-
-In this example, we move the linear array from `a` into `b`, but then try to set
-`c` to a reference to `a`, which, after the move, no longer points to anything.
-
-Internally, the memory management system uses *lifetimes* to model the
-relationships between references and linear values and track the validity of
-reference across your code.
-
-#### Lifetimes in Detail
-
-Carp's lifetimes are made up of two pieces of information. Only references have
-lifetimes, and every reference has *exactly one* lifetime assigned to it:
-
-- A unique type variable that identifies the lifetime.
-- A lifetime mode, that indicates if the linear value tied to the reference has
-  a lexical scope that extends beyond the reference's lexical scope or if it's
-  limited to the reference's lexical scope.
-
-In general, a reference is valid only when the value it points to has either an
-equivalent or greater lexical scope. This property is encoded in its lifetime.
-
-Let's look at some examples to help illustrate this:
-
-```clojure
-(def an-array [1 2 3])
-
-(defn valid-ref [] 
-  (let [array-ref &an-arry]) ())
-```
-
-In this example, the anonymous reference `&an-array` has a unique lifetime that
-*extends beyond the lexical scope* of the reference itself. The lexical scope of
-the reference value `[1 2 3]` is greater than or equal to the lexical scope of
-the reference, which only extends across the let form, so, this reference is
-valid.
-
-Contrarily, the following reference is not valid:
-
-```clojure
-(defn invalid-ref []
-  &[1 2 3])
-```
-
-Here, the reference has a greater lexical scope than the linear value it points
-to. The anonymous linear value `[1 2 3]` will be deleted at the end of the
-function scope, but the reference will be returned from the function, so its
-lifetime is potentially greater than that of the value it points to. 
-
-The memory management system performs two key checks around ref usage:
-
-1. Check that a newly created reference doesn't point to a linear value binding
-   that has already transferred away ownership.
-2. Check that a reference is alive at a certain point in the program.
-
-Both of these are implemented as separate checks, but they may be viewed as
-specializations of a general operation that checks if every reference form in
-your program is "alive" at the point of use.
-
-Currently, liveness analysis revolves around checking if the value the reference
-points to belongs to the same lexical scope as the reference, and, if so, that
-the value has a deleter in that scope, which indicates the scope properly owns
-the value. If no such deleter exists, it means the reference outlives the value
-it points to, and is invalid.
-
-### Type Dependencies
-
-The final key piece of information the memory system manages are the *type
-dependencies* of the deletion functions for linear values.
-
-Since Carp supports generic programming and polymorphic functions, it's possible
-that some deleter is needed in a polymorphic context. In particular, generic
-functions that "take ownership" of generic values need to be able to find the
-correct deletion routines for the value. For example, in the generic function:
-
-```clojure
-(sig my-generic-force-delete (Fn [a] Unit))
-
-(defn my-generic-force-delete [a]
-  ())
-```
-
-This `my-generic-force-delete` function takes ownership of whatever argument it
-receives and does nothing. Since it takes ownership, however, the value passed
-to `a`, if it's linear, needs to be deleted at the end of the function scope.
-
-Since the function is generic, the memory management system can't know for
-certain what value is being passed. In some cases it might be a linear value, in
-some cases it might not be. Sometimes it might be a `String`, sometimes an
-`Int`, or sometimes an `Array`. Each of these types has a different `delete` 
-implementation.
-
-Rather than having the memory management system figure out what function to use,
-the system instead just keeps track of the types of all the values for the forms
-it analyzes. Later, the component already dedicated to resolving generic
-functions handles finding the right deletion routine for the values passed to
-the generic function. In order to accomplish this, it uses the type information
-captured by the memory system as it analyzes each form.
-
-### Memory State
-
-As we've explored, the memory management system needs to keep track of three key
-pieces of information as it analyzes the forms in your program:
-
-1. The deleters assigned to each AST node to track ownership of linear values
-   and delete them at the right time.
-2. The Lifetimes assigned to each reference to check reference validity.
-3. The types of each form it analyzes to resolve generic deletion functions.
-
-Each of these units of information is bundled into a single data structure,
-called the *memory state* or `MemState` of your program.
-
-As the memory management system analyzes each of the AST nodes in your program
-source, it updates the memory state accordingly. Deleters are added and removed
-from the state at different points as ownership transfers of linear values
-occur. When the system finishes analyzing a node, it update's the node's `Info`
-object, attaching the deleters associated with the current memory state. At any
-point, if the memory management system encounters a problem with the way memory
-is being transferred across your program's AST nodes, it reports an error. 
-
-A simple piece of code:
-
-```clojure
-(use Int)
-(use String)
-(use IO)
-
-(defn say-hi [text]
-  (while true
-    (if (< (length &text) 10)
-      (println "Too short!")
-      (println &text))))
-```
-
-This compiles to the following C program:
-```C
-void say_MINUS_hi(string text) {
-    bool _5 = true;
-    while (_5) {
-        string* _14 = &text; // ref
-        int _12 = String_length(_14);
-        bool _10 = Int__LT_(_12, 10);
-        if (_10) {
-            string _19 = "Too short!";
-            string *_19_ref = &_19;
-            IO_println(_19_ref);
-        } else {
-            string* _22 = &text; // ref
-            IO_println(_22);
-        }
-        _5 = true;
-    }
-    String_delete(text);
-}
-```
-
-If-statements are kind of tricky in regards to memory management:
-```clojure
-(defn say-what [text]
-  (let [manage (copy &text)]
-    (if (< (length &text) 10)
-      (copy "Too short")
-      manage)))
-```
-
-The 'manage' variable is the return value in the second branch, but should get freed if "Too short" is returned.
-The output is a somewhat noisy C program:
-```C
-string say_MINUS_what(string text) {
-    string _5;
-    /* let */ {
-        string* _11 = &text; // ref
-        string _9 = String_copy(_11);
-        string manage = _9;
-        string _13;
-        string* _19 = &text; // ref
-        int _17 = String_length(_19);
-        bool _15 = Int__LT_(_17, 10);
-        if (_15) {
-            string _24 = "Too short";
-            string *_24_ref = &_24;
-            string _22 = String_copy(_24_ref);
-            String_delete(manage);
-            _13 = _22;
-        } else {
-            _13 = manage;
-        }
-        _5 = _13;
-    }
-    String_delete(text);
-    return _5;
-}
-```
-
-## Custom deletion functions
-
-The Carp compiler will auto-generate a deletion function for types created on
-the Carp side. The `delete` function is responsible for cleaning up any memory
-associated with its associated value when it goes out of scope. Type that are
-defined in C do not have a `delete` function generated for them automatically,
-you can write your own deletion function, declare it to be implementing `delete`
-and the Carp compiler will call it automatically for you. You can check if a
-type has `delete` implemented by using `Dynamic.managed?`.
-
-As the `delete` interface is responsible for freeing memory, it is **unsafe**
-to override it, if you are looking for how to release other type of resources
-(sockets, file handle, etc...) when a value goes out of scope use the [`drop`
-interface](./Drop.md) instead.
-
-Let’s look at an example program of how to add a deletion function to a type
-defined in C:
-
-```clojure
-(register-type Foo)
-(register-type Bar)
-
-(defmodule Foo
-  (register init (Fn [] Foo))
-  (register delete (Fn [Foo] ()))
-  (implements delete Foo.delete))
-
-(defmodule Bar
-  (register init (Fn [] Bar)))
-
-(defn f []
-  (let [a (Foo.init)
-        b (Bar.init)]
-    ()))
-```
-
-The code for `f` will look like this:
-
-```c
-void f() {
-    /* let */ {
-        Foo _6 = Foo_init();
-        Foo a = _6;
-        Bar _9 = Bar_init();
-        Bar b = _9;
-        /* () */
-        Foo_delete(a);
-    }
-}
-```
-
-Note that a deleter is emitted for the value of type `Foo` once the `let` block
-ends and it goes out of scope, but not for the value of type `Bar`, which has
-no deleter associated with it.
-
-### Related pages
-
-* [Drop][2] - a deeper look at the `drop` interface
-
-
-[1]:	https://www.rust-lang.org
-[2]:	Drop.md
-[3]:    CInterop.md#register-types
+`endo-map` は入力と同じ型の配列を返す必要があります。そうでない場合は `copy-map` を使ってください。`copy-` という接頭辞は、新しいメモリを確保することを示す目印です。

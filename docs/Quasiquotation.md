@@ -1,42 +1,35 @@
-# Quasiquotation
+# クォジクォート（準クォート）
 
-Quasiquotation is a way to quote parts of a list while evaluating others. It’s
-only available in the dynamic parts of the program.
+準クォートは、リストの一部を評価しつつ残りをクォートしたまま扱う仕組みで、動的な文脈でのみ利用できます。
 
-Quasiquotation enables the user to intersperse evaluated or “unquoted” portions
-into a unevaluated or “quoted” list.
+準クォートを使うと、評価済み（アンコートされた）要素と未評価（クォートされた）要素を同じリスト内に混在させることができます。
 
 ```clojure
 (defdynamic x 2)
 
 (quasiquote (+ (unquote x) 1)) ; => (+ 2 1)
 
-; also available as literals, quasiquote becomes `
-; and unquote becomes %
+; リテラル表記も利用できます。quasiquote は `、unquote は % に展開されます。
 `(+ %x 1) ; => (+ 2 1)
 ```
 
-Note that unquoting only makes sense inside `quasiquote` forms and using it
-outside will lead to errors at macro expansion time.
+`unquote` は `quasiquote` の内部でのみ意味を持ち、外側で使うとマクロ展開時にエラーになります。
 
-Since quasiquotation primarily deals with lists, the user might sometimes want
-to intersperse another list of values flatly, “splicing” them in. For this case
-Carp provides `unquote-splicing`.
+準クォートは主にリストを対象とするため、別のリストの要素をフラットに差し込みたい（スプライスしたい）こともあります。Carp ではその用途向けに `unquote-splicing` を提供しています。
 
 ```clojure
 (defdynamic x '(1 2))
 
 (quasiquote (+ (unquote-splicing x))) ; => (+ 1 2)
 
-; the literal for unquote-splicing is %@
+; リテラル表記では unquote-splicing は %@
 `(+ %@x) ; => (+ 1 2)
 ```
 
-Please note that while the code examples above only use variables, any
-expression can be used inside the `unquote` variants.
+上記の例では変数のみを使っていますが、`unquote` 系のフォームの内部には任意の式を記述できます。
 
 ```clojure
 (quasiquote (+ (unquote-splicing (map inc [1 2])))) ; => (+ 2 3)
-; or
+; もしくは
 `(+ %@(map inc [1 2])) ; => (+ 2 3)
 ```

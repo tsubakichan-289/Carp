@@ -1,23 +1,19 @@
-## The Language
+## 言語リファレンス
 
-### Introduction
+### はじめに
 
-Carp borrows its looks from Clojure but the runtime semantics are much closer to those of ML or Rust.
-Types are inferred but can be annotated for readability using the `the` keyword (see below).
+Carp の構文は Clojure に似ていますが、実行時のセマンティクスは ML や Rust に近いものです。型は基本的に推論されますが、可読性のために `the` キーワードで注釈を付けることもできます（後述）。
 
-Memory management is handled by static analysis, a value is owned by the function where it was created.
-When a value is returned or passed to another function the initial function will give up ownership of it
-and any subsequent use will lead to a compiler error. To temporarily lend a value to another function
-(for example to print it) a reference must be created, using the `ref` special form (or the `&` reader macro).
+メモリ管理は静的解析で行われ、値は生成された関数に所有権があります。値を戻り値として返したり、別の関数へ渡した場合は元の関数が所有権を放棄し、その後に使用するとコンパイルエラーになります。別の関数に一時的に値を貸し出したい場合（たとえば表示したいとき）は `ref` 特殊フォーム（またはリーダーマクロ `&`）を使って参照を生成します。
 
-To learn more about the details of memory management, check out [Memory.md](Memory.md)
+メモリ管理の詳細は [Memory.md](Memory.md) を参照してください。
 
-### Comments
+### コメント
 ```clojure
-;; Comments begin with a semicolon and continue until the end of the line.
+;; セミコロンから行末までがコメントです。
 ```
 
-### Data Literals
+### データリテラル
 ```clojure
 100     ;; Int
 1500l   ;; Long
@@ -32,10 +28,10 @@ true    ;; Bool
 {1 1.0 2 2.0} ;; (Map Int Double)
 ```
 
-### Type Literals
+### 型リテラル
 ```clojure
-t ;; Type variables begin with a lowercase letter
-(f t) ;; Type constructor variables; matches `(Maybe Int)` but not `Int`
+t ;; 型変数は小文字で始まります
+(f t) ;; 型コンストラクタの変数。`(Maybe Int)` にはマッチするが `Int` にはマッチしない
 Int
 Long
 Float
@@ -47,45 +43,45 @@ Pattern
 Char
 (Array t)
 (Map <key-type> <value-type>)
-(Fn [<arg-type1> <arg-type2> ...] <return-type>) ;; Function type
+(Fn [<arg-type1> <arg-type2> ...] <return-type>) ;; 関数型
 ```
 
-### Dynamic-only Data Literals
-Right now the following data types are only available for manipulation in non-compiled code.
+### 動的専用のデータリテラル
+現在、以下のデータ型は非コンパイルコード（REPL など）でのみ操作可能です。
 
 ```clojure
 (1 2 3) ; list
 foo ; symbol
 ```
 
-### Defining things
+### 定義の仕方
 ```clojure
-(defn function-name [<arg1> <arg2> ...] <body>) ;; Define a function (will be compiled, can't be called at the REPL)
-(definterface interface-name (Fn [<t1> <t2>] <return>)) ;; Define a generic function that can have multiple implementations
-(def variable-name value) ;; Define a global variable (only handles primitive constants for the moment)
-(defmacro <name> [<arg1> <arg2> ...] <macro-body>) ;; Define a macro, its argument will not be evaluated when called
-(defdynamic <name> <value>) ;; A variable that can only be used at the REPL or during compilation
-(defndynamic <name> [<arg1> <arg2> ...] <function-body>) ;; A function that can only be used at the REPL or during compilation
-(defmodule <name> <definition1> <definition2> ...) ;; The main way to organize your program into smaller parts
+(defn function-name [<arg1> <arg2> ...] <body>) ;; 関数定義（コンパイルされ、REPL からは呼び出せない）
+(definterface interface-name (Fn [<t1> <t2>] <return>)) ;; 複数の実装を持てる汎用関数を定義
+(def variable-name value) ;; グローバル変数を定義（現状はプリミティブな定数を想定）
+(defmacro <name> [<arg1> <arg2> ...] <macro-body>) ;; マクロ定義。引数は展開時に評価されない
+(defdynamic <name> <value>) ;; REPL やコンパイル時のみ利用できる変数
+(defndynamic <name> [<arg1> <arg2> ...] <function-body>) ;; REPL やコンパイル時のみ利用できる関数
+(defmodule <name> <definition1> <definition2> ...) ;; プログラムをモジュールに分割する主要な手段
 ```
 
-### Conditional statements with `cond`
-The `cond` statement executes a block of code if a specified condition is true. If the condition is false, another block of code can be executed.
+### `cond` による条件分岐
+`cond` は条件が真なら対応するコードブロックを実行し、偽なら別のブロックを実行します。
 
 ```clojure
 (doc cond "this is the documentation for cond")
 ```
 
-Usage:
+使用例:
 
 ```clojure
 (cond
-          (<condition_1>) (<code_1>) ;; code_1 gets executed if condition_1 is true
-          (<condition_2>) (<code_2>) ;; code_2 gets executed if condition_2 is true
-          (<code_3>) ;; code_3 gets executed if condition_1 and condition_2 are false
+          (<condition_1>) (<code_1>) ;; condition_1 が真なら code_1 を実行
+          (<condition_2>) (<code_2>) ;; condition_2 が真なら code_2 を実行
+          (<code_3>) ;; 上記がどちらも偽なら code_3 を実行
 ```
 
-Here's an example about printing a statement depending on whether it is < or > 10:
+10 より小さいか大きいかでメッセージを切り替える例:
 
 ```clojure
 (cond
@@ -94,94 +90,91 @@ Here's an example about printing a statement depending on whether it is < or > 1
   (println "Don't print!"))
 ```
 
-### Special Forms
-The following forms can be used in Carp source code and will be compiled to C after type checking
-and other static analysis. The first three of them are also available in dynamic functions.
+### 特殊フォーム
+以下のフォームは Carp のソースコードで利用でき、型チェックや静的解析の後に C へ変換されます。最初の 3 つは動的関数でも使用可能です。
 
 ```clojure
-(fn [<arg1> <arg2> ...] <body>) ;; Create a lambda function (a.k.a. closure)
-(let [<var1> <expr1> <var2> <expr2> ...] <body>) ;; Create local bindings
-(do <expr1> <expr2> ... <return-expression>) ;; Perform side-effecting functions, then return a value
-(if <expression> <true-branch> <false-branch>) ;; Branching
-(while <expression> <body>) ;; Loop until expression is false
-(use <module>) ;; Brings all symbols inside <module> into the scope
-(with <module> <expr1> <expr2> ...) ;; Locally scoped `use` statement where all expressions after it will look up symbols in the <module>
-(match <expression> <case1> <expr1> <case2> <expr2> ...) ;; Pattern matches an <expression> against a set of sumtype constructors
-(match-ref <expression> <case1> <expr1> <case2> <expr2> ...) ;; Pattern matches an <expression> of reference type, not taking ownership of its members
-(ref <expression>) ;; Borrow an owned value
-(set! <variable> <expression>) ;; Mutate a variable
-(the <type> <expression>) ;; Explicitly declare the type of an expression
+(fn [<arg1> <arg2> ...] <body>) ;; ラムダ（クロージャ）を生成
+(let [<var1> <expr1> <var2> <expr2> ...] <body>) ;; ローカル変数を束縛
+(do <expr1> <expr2> ... <return-expression>) ;; 副作用のある処理を順に実行し、最後の値を返す
+(if <expression> <true-branch> <false-branch>) ;; 条件分岐
+(while <expression> <body>) ;; 式が偽になるまでループ
+(use <module>) ;; モジュール内のシンボルをスコープへ取り込む
+(with <module> <expr1> <expr2> ...) ;; ローカルな `use`。以降の式で <module> のシンボルを参照
+(match <expression> <case1> <expr1> <case2> <expr2> ...) ;; 合併型コンストラクタに対してパターンマッチ
+(match-ref <expression> <case1> <expr1> <case2> <expr2> ...) ;; 参照型の値を所有権を奪わずにパターンマッチ
+(ref <expression>) ;; 所有権を持つ値を借用
+(set! <variable> <expression>) ;; 変数を破壊的に更新
+(the <type> <expression>) ;; 式の型を明示的に指定
 ```
 
-Here's an example of how to use the `the` form to make an identity function that only accepts Integers:
+例えば、`the` フォームを使って Int のみを受け付ける恒等関数を定義できます。
 
 ```clojure
 (defn f [x]
   (the Int x))
 ```
 
-### Reader Macros
+### リーダーマクロ
 ```clojure
-&x ;; same as (ref x)
-@x ;; same as (copy x)
+&x ;; (ref x) と同じ
+@x ;; (copy x) と同じ
 ```
 
-### Named Holes
-When using a statically typed language like Carp it can sometimes be hard to know what value should
-be used at a specific point in your program. In such cases the concept of 'holes' can be useful. Just
-add a hole in your source code and reload (":r") to let the Carp compiler figure out what type goes there.
+### 名前付きホール
+静的型付き言語では、どんな値を置けばよいか分からなくなることがあります。そのようなときは「ホール」を置いておき、`:r`（リロード）するとコンパイラが必要な型を教えてくれます。
 
 ```clojure
-(String.append ?w00t "!") ;; Will generate a type error telling you that the type of '?w00t' is &String
+(String.append ?w00t "!") ;; '?w00t' の型が &String だと分かる
 ```
 
-### Special forms during evaluation of dynamic code
+### 動的コード評価時の特殊フォーム
 ```clojure
-(quote <expression>) ;; Avoid further evaluation of the expression
-(and) (or) (not) ;; Logical operators
+(quote <expression>) ;; これ以上評価しない
+(and) (or) (not) ;; 論理演算子
 ```
 
-### Dynamic functions
-These can only be used at the REPL and during macro evaluation. Here's a subset with some of the most commonly used ones:
+### 動的関数
+これらは REPL もしくはマクロ展開時にのみ使用できます。よく使われる一部を紹介します。
 
 ```clojure
-(car <collection>) ;; Return the first element of a list or array
-(cdr <collection>) ;; Return all but the first element of a list or array
-(cons <expr> <list>) ;; Add the value of <expr> as the first element the <list>
-(cons-last <expr> <list>) ;; Add the value of <expr> as the last element the <list>
-(list <expr1> <expr2> ...) ;; Create a list from a series of evaluated expressions
-(array <expr1> <expr2> ...) ;; Create an array from a series of evaluated expressions
+(car <collection>) ;; リスト／配列の先頭要素を返す
+(cdr <collection>) ;; 先頭要素以外を返す
+(cons <expr> <list>) ;; <expr> の値を <list> の先頭へ追加
+(cons-last <expr> <list>) ;; <expr> の値を <list> の末尾へ追加
+(list <expr1> <expr2> ...) ;; 評価した式列からリストを生成
+(array <expr1> <expr2> ...) ;; 評価した式列から配列を生成
 ```
 
-To see all functions available in the `Dynamic` module, enter `(info Dynamic)` at the REPL.
+`Dynamic` モジュールで利用できる関数の一覧は REPL で `(info Dynamic)` を実行してください。
 
+### 構造体（Structs）
+Carp で定義した構造体はすべて `init` メソッドを持ち、新しいインスタンスを生成できます。フィールドは定義順に渡す必要があります。
 
-### Structs
-Any structure type defined in Carp has an init method that can be used to create a new instance. It must be called with all the arguments in the order they are defined.
 ```clojure
 (deftype Vector2 [x Int, y Int])
 
 (let [my-pos (Vector2.init 10 20)]
   ...)
 
-;; Additionally, a 'lens' is automatically generated for each member; signatures for reference:
+;; 各メンバーには自動的にレンズが生成されます
 ;; Vector2.x (Fn [(Ref Vector2)] (Ref Int))
 (Vector2.x &my-pos) ;; => 10
 ;; Vector2.set-x (Fn [Vector2 Int] Vector2)
 (Vector2.set-x my-pos 30) ;; => (Vector2 30 20)
 ;; Vector2.set-x! (Fn [(Ref Vector2), Int] ())
-(Vector2.set-x! &my-pos 30) ;; => Will update the vector my-pos in place and return ()
-;; Note the inner reference to a function
+(Vector2.set-x! &my-pos 30) ;; => その場で更新し () を返す
+;; 関数への参照を取るレンズ
 ;; Vector2.update-x (Fn [Vector2, (Ref (Fn [Int] Int))] Vector2)
 (Vector2.update-x my-pos inc) ;; => (Vector2 11 20)
-;; This can also be a lambda
+;; ラムダも渡せます
 (Vector2.update-x my-pos &(fn [n] (* n 3))) ;; => (Vector2 30 20)
 ```
 
-### Sumtypes
-There are two ways to define `sumtypes`:
+### 合併型（Sumtype）
+`sumtype` を定義する方法は 2 通りあります。
 
-**Enumeration:**
+**列挙型:**
 ```clojure
 (deftype MyEnum
   Kind1
@@ -189,20 +182,20 @@ There are two ways to define `sumtypes`:
   Kind3)
 ```
 
-**Data:**
+**データ型:**
 ```clojure
 (deftype (Either a b)
   (Left [a])
   (Right [b]))
 ```
 
-A Variant can be created with the same syntax as call expression:
+バリアントは関数呼び出しのような構文で生成します。
 ```clojure
 (MyEnum.Kind1)
 (Either.Left 10)
 (Either.Right 11)
 
-;; Or use `use` statement
+;; `use` しておけばモジュール名を省略可能
 (use Either)
 (Left 10)
 (Right 11)
@@ -213,7 +206,7 @@ A Variant can be created with the same syntax as call expression:
 (Kind3)
 ```
 
-You can use pattern matching to extract values in a safe way:
+値を安全に取り出すにはパターンマッチを利用します。
 ```clojure
 (defn get [either]
   (match either
@@ -221,13 +214,13 @@ You can use pattern matching to extract values in a safe way:
     (Either.Right b) b))
 
 (with MyEnum
-  ;; You can give a generic "otherwise" statement as well
+  ;; 「その他」のケースをまとめることもできます
   (match myenum
     (Kind1) (logic1)
     _ (logic-other)))
 ```
 
-Note that match works with *values* (not references) takes ownership over the value being matched on. If you instead want to match on a reference, you can use `match-ref`:
+`match` は値（所有権を持つもの）に対して動作するため、マッチ対象の所有権を取得します。参照に対してマッチしたい場合は `match-ref` を使います。
 
 ```clojure
 (match-ref &might-be-a-string
@@ -235,15 +228,14 @@ Note that match works with *values* (not references) takes ownership over the va
   Nothing (IO.println "Got nothing"))
 ```
 
-Note that this code would not take ownership over `might-be-a-string`. Also, the `s` in the first case is a reference, since it wouldn't be safe to destructure the `Maybe` into values in this situation.
+このコードは `might-be-a-string` の所有権を奪いません。また最初のケースで得られる `s` は参照です。この状況では `Maybe` を値として分解するのは安全ではないためです。
 
-**Note:** A sumtype cannot have more than 128 inhabitants, also known as constructors. If that reads to you like a byte limitation, you’re on the right track. While this is a limitation, it has not proved to be a problem as of yet.
+**注意:** 合併型は最大 128 個までのバリアント（コンストラクタ）しか持てません。バイト数の制限を想像した方はその通りです。制約ではありますが、現在のところ問題になるケースは報告されていません。
 
-### Modules and Name Lookup
-Functions and variables can be stored in modules which are named and can be nested. To use a symbol inside a module
-you need to qualify it with the module name, like this: `Float.cos`.
+### モジュールと名前解決
+関数や変数はモジュールに格納でき、モジュールはネスト可能です。モジュール内のシンボルを使うには `Float.cos` のようにモジュール名で修飾します。
 
-*Using* a module makes it possible to access its members without qualifying them:
+`use` を使うと修飾なしで参照できます。
 
 ```clojure
 (use Float)
@@ -252,10 +244,7 @@ you need to qualify it with the module name, like this: `Float.cos`.
   (cos 3.2f))
 ```
 
-If there are several used modules that contain symbols with the same name, the type inferer will try to figure
-out which one of the symbols you really mean (based on the types in your code). If it can't, it will display an error.
-For example, both the module `String` and `Array` contain a function named 'length'. In the following code it's
-possible to see that it's the array version that is needed, and that one will be called:
+複数のモジュールを `use` し、同名のシンボルが存在すると型推論器が文脈から解釈を試みます。判断できない場合はエラーになります。たとえば `String` と `Array` にはどちらも `length` 関数が存在しますが、以下のコードでは配列版が必要だと分かるため問題ありません。
 
 ```clojure
 (use String)
@@ -265,7 +254,7 @@ possible to see that it's the array version that is needed, and that one will be
   (length [1 2 3 4 5]))
 ```
 
-In the following example it's not possible to figure out which type is intended:
+一方、次のコードでは意図が判別できずエラーになります。
 ```clojure
 (use String)
 (use Array)
@@ -274,7 +263,7 @@ In the following example it's not possible to figure out which type is intended:
   (length x))
 ```
 
-Specifying the type solves this error:
+型を明示すれば解決できます。
 ```clojure
 (use String)
 (use Array)
@@ -283,71 +272,62 @@ Specifying the type solves this error:
   (String.length x))
 ```
 
-When you `use` a module, its declarations are brought into the current scope. If you `use` a module in the global scope, all of its declarations are brought into global scope after the call to `use`. Similarly, if you `use` a module in another module's scope, its declarations can be referred to without qualifiers within the scope of the module:
+グローバルスコープで `use` すると、そのモジュールの宣言がグローバルスコープへ取り込まれます。モジュール内部で `use` した場合は、そのモジュールのスコープ内で修飾なしに参照できます。
 
 ```clojure
 (use String)
 
-;; Only the `String` module is used in the global scope,
-;; so we can refer to `length` without a module qualifier.
+;; グローバルでは String だけを use しているので修飾なしで呼べる
 (defn f [x]
   (length x))
 
 (defmodule Foo
   (use Array)
-  ;; Since the the `String` module is used in the global scope,
-  ;; and the Foo module `use`s `Array`, we again need to qualify calls to `length`
-  ;; to disambiguate which declaration we're referring to.
+  ;; グローバルでは String を use、Foo では Array を use しているため
+  ;; `length` を呼ぶ際は曖昧さを避けるため修飾が必要
   (defn g [xs]
     (Array.length xs)))
 ```
 
-Sometimes, it's more convenient to bring a module's declarations into scope only for a limited number of forms. You can do this using the `with` form:
+一定範囲だけ宣言を取り込みたい場合は `with` フォームが便利です。
 
 ```clojure
 (defmodule Foo
-  ;; we need to use a module qualifier here,
-  ;; since there's no call to `use` in the `Foo` module scope.
+  ;; ここではまだ修飾が必要
   (defn f [x]
     (String.length x))
 
-  ;; Using the `with` form, we can reference the module's declarations
-  ;; unqualified in all the forms contained in the `with`'s scope.
+  ;; with のスコープ内では修飾なしで参照できる
   (with String
     (defn g [x]
       (length x))))
 ```
 
-It can be useful to keep some bindings internal to a module, to achieve that
-one can use `private` and `hidden`:
+バインディングをモジュール内部に隠しておきたい場合は `private` と `hidden` を使います。
 
 ```clojure
 (defmodule Say
-  ; Makes `hell` inaccessible outside of module `Say`
+  ;; モジュール外から `hell` を参照できなくする
   (private hell)
-  ; Will prevent `hell` from being visible when listing bindings in `Say`
+  ;; バインディング一覧で `hell` が表示されないようにする
   (hidden hell)
   (defn hell [] @"hell")
 
-  ; `private` & `hidden` work with `def` and `defn`
+  ;; `def` や `defn` に対しても利用可能
   (private o)
   (hidden o)
   (def o @"o")
 
-  ; Can access `hell` and `o` inside the module
+  ;; モジュール内からは参照できる
   (defn hello [] (String.concat &[(hell) @&o])))
 
 
-; Valid call as `hello` is not private
-(Say.hello)
+(Say.hello) ;; `hello` は公開されているので呼べる
 
-; Will result in an compile time error as `hell` is private to the `Say` module
-(Say.hell)
+(Say.hell) ;; `hell` は private のためコンパイルエラー
 ```
 
-`defn-` and `def-` can be used as a shorthand for defining a binding and
-marking it as `private` & `hidden`, the following example is equivalent to the
-previous one:
+`defn-` や `def-` を使うと、バインディング定義と同時に `private`／`hidden` を付与できます。以下は先ほどのコードと同等です。
 
 ```clojure
 (defmodule Say
@@ -356,19 +336,15 @@ previous one:
  (defn hello [] (String.concat &[(hell) @&o])))
 ```
 
-### Interfaces
+### インタフェース
 
-Interfaces specify a generic function signature that multiple concrete
-functions may implement. You can define an interface using
-`definterface`, passing a name and type signature of a function:
+インタフェースは汎用関数のシグネチャを定め、複数の具象関数がその実装を提供できます。`definterface` に名前と型シグネチャを渡して定義します。
 
 ```clojure
 (definterface speak (Fn [a] String))
 ```
 
-You can declare a function as an implementation of an interface using
-`implements`. For example, the following snippet declares `Dog.bark`
-and `Cat.meow` as an implementation of `speak`:
+実装を宣言するには `implements` を使用します。次の例では `Dog.bark` と `Cat.meow` を `speak` の実装として登録しています。
 
 ```clojure
 (definterface speak (Fn [a] String))
@@ -383,137 +359,108 @@ and `Cat.meow` as an implementation of `speak`:
   (implements speak Cat.meow))
 ```
 
-Only functions that satisfy an interface's signature can implement
-it. For exmaple, the following function isn't a valid implementation
-of `speak` because it has the wrong number of arguments and its return
-type does not match the return type of `speak`:
+インタフェースのシグネチャと一致する関数のみが実装として登録できます。以下のように引数や戻り値が合わない場合はエラーになります。
 
 ```clojure
 (defmodule Number
-  ;; who knew numbers could talk?
   (defn holler [] "WOO!")
   (implements speak Number.holler))
 => [INTERFACE ERROR] Number.holler : (Fn [] (Ref String a)) doesn't match the interface signature (Fn [a] String)
 ```
 
-When you call an interface by name, Carp uses the current context and
-the type signature of each implementation to call an implementation
-that type checks:
+インタフェース名で呼び出すと、現在のコンテキストと各実装の型シグネチャをもとに適切な実装が選ばれます。
 
 ```clojure
-(speak 2) ;; Int -> String, Cat.meow
+(speak 2) ;; Int -> String。Cat.meow
 => "meow!meow!"
-(speak false) ;; Bool -> String, Dog.bark
+(speak false) ;; Bool -> String。Dog.bark
 => "woof!"
 ```
 
-If more than one interface implementation satisfies Carp's type
-checker in a given context, Carp will complain about the ambiguity:
+同じシグネチャの実装が複数存在し曖昧になる場合はエラーになります。
 
 ```clojure
 (defmodule Pikachu
   (defn pika [times] (String.repeat times "pika!"))
   (implements speak Pikachu.pika))
 
-(speak 2) ;; Int -> String, Cat.meow OR Pikachu.pika
-=> There are several exact matches for the interface `speak` of type `(Fn [Int] String)` at line 1, column 2 in 'REPL'
-Possibilities:
-    Cat.meow : (Fn [Int] String)
-    Pikachu.pika : (Fn [Int] String) at REPL:1:1.
+(speak 2)
+=> There are several exact matches for the interface `speak` of type `(Fn [Int] String)` ...
 ```
 
-In such cases, you'll have to help the Carp compiler disambiguate the
-call by calling the implementing function you need
-directly. It usually isn't useful to provide multiple
-implementations that have the same function signature.
+この場合は、必要な実装を直接呼び出して曖昧さを解消します。同じシグネチャの実装を複数提供するのはあまり有用ではありません。
 
-### C Interop
+### C との相互運用
 ```clojure
-(system-include "math.h") ;; compiles to #include <math.h>
-(relative-include "math.h") ;; compiles to #include "$carp_file_dir/math.h" where carp_file_dir is the absolute path to the folder containing the invoking .carp file
+(system-include "math.h") ;; #include <math.h> に展開
+(relative-include "math.h") ;; #include "$carp_file_dir/math.h" に展開（$carp_file_dir は .carp のディレクトリ絶対パス）
 
-(register blah (Fn [Int Int] String)) ;; Will register the function 'blah' that takes two Int:s and returns a String
-(register pi Double) ;; Will register the global variable 'pi' of type Double
+(register blah (Fn [Int Int] String)) ;; Int を 2 つ受け取り String を返す C 関数 `blah` を登録
+(register pi Double) ;; Double 型のグローバル変数 `pi` を登録
 
-(register blah (Fn [Int Int] String) "exit") ;; Will register the function 'blah' but use the name 'exit' in the emitted C code.
+(register blah (Fn [Int Int] String) "exit") ;; C コード上の名前を `exit` にする
 
-(register-type Apple) ;; Register an opaque C type
-(register-type Banana [price Double, size Int]) ;; Register an external C-struct, this will generate getters, setters and updaters.
+(register-type Apple) ;; Opaque な C 型を登録
+(register-type Banana [price Double, size Int]) ;; 外部の C 構造体を登録（getter/setter/updater を自動生成）
 ```
 
-Often type names in C are lowercase (e.g. `size_t`) and just registering them will be problematic since Carp thinks that such variables are generic types.
-To be able to interop wich such types, `register-type` takes an optional string after the type name, like this:
+C の型名は小文字であることが多く（`size_t` など）、そのまま登録すると Carp では多相型と解釈されるため問題が生じます。その場合は `register-type` の第 2 引数に C 側の名前を渡します。
 
 ```clojure
 (register-type SizeT "size_t")
 ```
 
-This will make the name of the type in Carp code be `SizeT`, while the emitted C code will use `size_t` instead.
+これにより Carp では `SizeT` として扱い、出力される C コードでは `size_t` になります。
 
-[More information on C interop...](./CInterop.md)
+詳しくは [C との相互運用ガイド](./CInterop.md) を参照してください。
 
-### Patterns
+### パターン
 
-Patterns are similar to, but not the same as, Regular Expressions. They were
-derived from [Lua](http://lua-users.org/wiki/PatternsTutorial), and are useful
-whenever you want to find something within or extract something from strings.
+パターンは正規表現に似ていますが同じではありません。[Lua](http://lua-users.org/wiki/PatternsTutorial) に由来し、文字列から何かを検索・抽出したいときに便利です。正規表現ほど表現力はありませんが、そのぶん高速かつ予測しやすいのが特徴です。
 
-They are simpler than Regular Expressions, as they do not provide alternation.
-Nonetheless, they are often very useful and, because they are simpler, also
-faster and more predictable.
-
-Here is a little overview of the API:
+API の概要は以下のとおりです。
 
 ```clojure
-; you can initialize a pattern with a literal or create one from a string
+; リテラルで初期化するか、文字列から生成
 #"[a-z]"
 (Pattern.init "[a-z]")
 
-; you can also get a string back from it
+; 文字列に戻すことも可能
 (str #"[a-z]")
 (prn #"[a-z]")
 
-; you can find things in strings by index
+; 文字列内の位置を検索
 (Pattern.find #"[a-z]" "1234a") ; => 4
 (Pattern.find #"[a-z]" "1234")  ; => -1
 
-; also multiple things at once!
+; 複数ヒットも
 (Pattern.find-all #"[a-z]" "1234a b") ; => [4 6]
 
-; matches? checks whether a string matches a pattern
+; matches? は完全一致を確認
 (Pattern.matches? #"(\d+) (\d+)" "  12 13") ; => true
 
-; match-groups returns all match groups of the first match
+; match-groups は最初のマッチのグループを返す
 (Pattern.match-groups #"(\d+) (\d+)" "  12 13") ; => ["12" "13"]
 
-; match-str returns the whole string of the first match
+; match-str は最初のマッチ全体を返す
 (Pattern.match-str #"(\d+) (\d+)" "  12 13") ; => "12 13"
 
-; global-match gets all match groups of all matches
+; global-match は全マッチのグループを取得
 (Pattern.global-match #"(\d+) (\d+)" "  12 13 14 15") ; => [["12" "13"] ["14" "15"]]
 
-; substitute helps you replace patterns in a string n times
+; substitute は文字列内のパターンを n 回置換
 (Pattern.substitute #"sub-me" "sub-me sub-me sub-me" "replaced" 1) ; => "replaced sub-me sub-me"
 
-; if you want to replace every occurrence, use -1
+; すべて置換するなら -1
 (Pattern.substitute #"sub-me" "sub-me sub-me sub-me" "replaced" -1) ; => "replaced replaced replaced"
 ```
 
-#### Limitations of Patterns
+#### パターンの制限
 
-As mentioned above, patterns are not as expressive as regular expressions. The
-fundamental difference is that patterns do not backtrack. This means that they
-cannot express alternation (because we can’t go back to where we branched) and
-we cannot reduce non-greedy matches on the left. The latter point might not be
-obvious, so let us look at an example:
+前述のとおり、パターンは正規表現ほど表現力がありません。最も大きな違いはバックトラックをしないことです。そのため選択（オルタネーション）を表現できず、非貪欲な左側マッチも縮められません。後者は直感的ではないかもしれないので例を見てみましょう。
 
 ```
 (Pattern.match-all-groups #"1.-2" "1 1 2") ; => [[@"1 1 2"]]
 ```
 
-A valid, less greedy match would have been `"1 2"`, but since it would have
-required us to go back to the left after we had started matching to reduce the
-match size, this is not done. As such, while `-` is similar to `*?` in regular
-expressions, it is not the same. Often, a more explicit variant of the pattern
-can be found that is able to resolve the issues (in the case above, `#"1\s-2"`
-might have been desirable, for instance).
+より短いマッチである `"1 2"` も理論上は正しいですが、左側に戻ってマッチ範囲を縮める必要があるため採用されません。このように `-` は正規表現の `*?` に似ていますが同じではありません。多くの場合、より明示的なパターンを用意すれば解決できます（上記なら `#"1\s-2"` など）。

@@ -1,26 +1,26 @@
-# Terminology (WORK IN PROGRESS)
+# 用語集（作業中）
 
-## Introduction
-This document contains commonly used words, concepts and jargon for the Carp programming language. It should be particularly helpful when naming things and writing documentation. Ideally it will remove ambiguity, make us spell things the same way, and generally make the Carp ecosystem feel more unified.
+## はじめに
+この文書では Carp で頻繁に用いられる単語や概念、専門用語をまとめています。命名やドキュメント作成時の指針として役立ててください。表記揺れや曖昧さを減らし、Carp のエコシステム全体に一貫性を持たせることを目指しています。
 
-Pull requests for this document are very welcome, and please tell us in the [Gitter Channel](https://gitter.im/eriksvedang/Carp?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge) if something is missing!
+この文書へのプルリクエストを歓迎します。「こんな用語もある」と思ったらぜひ [Gitter チャンネル](https://gitter.im/eriksvedang/Carp?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge) で教えてください。
 
-### Mutating function
-What should this mean exactly? Ideally it should only be used for functions ending in a `!` that return `()`. Perhaps it should be called "externally mutating function"..? Or maybe "exo-functions" :)
+### Mutating function（破壊的関数）
+厳密にはどのような意味で使うべきでしょうか。理想的には末尾が `!` で戻り値が `()` の関数に限って使うのが良いと思われます。「外部破壊的関数」や「exo-function」といった呼び名も候補です。
 
-### Owning function
-An *owning* function is a function that takes ownership over the value it is passed. This means that is has responsibility of freeing that memory (or pass it to another owning function, or return it).
+### Owning function（所有関数）
+*所有関数* は引数として受け取った値の所有権を取得する関数です。メモリの解放責任を持ち、別の所有関数に渡すか戻り値として返さない限り、自分で解放する必要があります。
 
-### Borrowing function
-A *borrowing* function is a function that does not take ownership over the value it is passed. This means that is is not allowed to free the memory of that value but must leave it intact.
+### Borrowing function（借用関数）
+*借用関数* は引数の所有権を取得しない関数です。値のメモリを解放することは許されず、そのままの状態で保つ必要があります。
 
 ### Transforming function / endo-functions
-What is a good name for a function that is both owning and internally mutating, like `endo-map`? These functions are common in Carp and allow for a functional programming style without the need to copy or allocate memory.
+所有権を取得しつつ内部で破壊的変更を行う関数（`endo-map` など）を何と呼ぶべきか検討中です。Carp ではよく登場するスタイルであり、コピーや確保を伴わずに関数型スタイルを実現できます。
 
-### Unsafe function
-Unsafe functions (most often) start with the prefix `unsafe-` and *can* crash the program if certain preconditions are not met. A good example is `Array.unsafe-first` which gets the first value in an array. Calling this if the array is empty will crash the program.
+### Unsafe function（アンセーフ関数）
+アンセーフ関数は多くの場合 `unsafe-` プレフィックスで始まり、特定の前提条件が満たされないとプログラムがクラッシュする可能性があります。例として `Array.unsafe-first` は配列の先頭要素を返す関数ですが、空配列に対して呼び出すとクラッシュします。
 
-The `unsafe-` prefix is an optional naming convention; there *are* a few functions that are not safe which does not use this naming scheme. A notable example is `Array.nth` which crashes if given an invalid index. Any other unsafe functions should be thoroughly documented as such, and using the `unsafe-` prefix is very much encouraged in library code!
+`unsafe-` プレフィックスは慣習的な命名であり、例外も存在します。たとえば `Array.nth` は不正なインデックスを渡すとクラッシュしますが、`unsafe-` は付いていません。アンセーフな関数は必ずドキュメントなどで明記し、ライブラリコードでは積極的に `unsafe-` プレフィックスを用いることを推奨します。
 
 ### REPL
-*REPL* stands for "Read Eval Print Loop" and is a common feature of a Lisp system. It allows expressions to be entered and executed at a command prompt. In Carp it is spelled with uppercase letters.
+*REPL* は「Read Eval Print Loop」の略で、Lisp 系言語にとって一般的な機能です。対話的に式を入力して実行できます。Carp では必ず大文字で表記します。

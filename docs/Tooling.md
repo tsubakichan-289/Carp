@@ -1,4 +1,4 @@
-# Tooling
+# ツール
 
 ## Vim
 [https://github.com/hellerve/carp-vim](https://github.com/hellerve/carp-vim)
@@ -7,8 +7,7 @@
 [https://github.com/carp-lang/carp-emacs](https://github.com/carp-lang/carp-emacs)
 
 ## Atom
-[language-carp](https://atom.io/packages/language-carp) offers highlight with both TextMate and Tree-sitter, where tree-sitter grammar is more powerful.
+[language-carp](https://atom.io/packages/language-carp) は TextMate と Tree-sitter の両方でハイライトを提供します。Tree-sitter 版の文法の方が表現力が高いです。
 
-## Other editors
-Clojure syntax highlighting works very well with Carp since it uses the same symbols for most things.
-If you have written an editor mode, please tell us and it will be added here!
+## その他のエディタ
+Carp は多くの記号が Clojure と共通しているため、Clojure 用のシンタックスハイライトをそのまま活用できます。独自のエディタモードを作成した場合はぜひ知らせてください。このページに追記します。

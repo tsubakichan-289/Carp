@@ -1,158 +1,158 @@
-## The Compiler Manual
+## コンパイラマニュアル
 
-### Related pages
+### 関連ページ
 
-* [Installation](Install.md) - how to acquire and configure the Carp compiler
-* [How To Run Code](HowToRunCode.md) - compile and execute .carp files
-* [Tooling](Tooling.md) - supported editors
-* [Libraries](Libraries.md) - how to work with libraries and modules
-* [Multimedia](Multimedia.md) - graphics, sounds, etc
-* [Macros](Macros.md) - a guide to the Carp macro system
-* [Embedded](Embedded.md) - tips and tricks for working with Carp on embedded system
-* [Terminology](Terminology.md) - commonly used terms and what we mean with them
+* [インストール](Install.md) — Carp コンパイラの入手と設定
+* [コードの実行方法](HowToRunCode.md) — .carp ファイルのコンパイルと実行
+* [ツール](Tooling.md) — 対応エディタ
+* [ライブラリ](Libraries.md) — ライブラリ／モジュールの扱い方
+* [マルチメディア](Multimedia.md) — グラフィックスやサウンド関連
+* [マクロ](Macros.md) — Carp のマクロシステムガイド
+* [組み込み開発](Embedded.md) — 組み込み環境で Carp を使うためのヒント
+* [用語解説](Terminology.md) — よく使う用語の意味
 
-To learn more about the Carp language and its syntax and semantics, check out the [Carp Language Guide](LanguageGuide.md).
+Carp の言語仕様や構文・セマンティクスについては [Carp Language Guide](LanguageGuide.md) を参照してください。
 
-### REPL Basics
+### REPL の基本
 
-The Carp language is very tightly integrated with the REPL, everything you want to do to your program can be controlled from here.
+Carp は REPL と密接に統合されており、プログラムに対する操作はすべてここから行えます。
 
-To load code from disk, use ```(load "filename.carp")```, this will add the source file `filename.carp` to the current 'project'. A project is a light weight concept in the repl that ties together source files and compiler settings much like in an IDE like Eclipse or Visual Studio.
+ディスク上のコードを読み込むには `(load "filename.carp")` を使います。これによりソースファイル `filename.carp` が現在の「プロジェクト」に追加されます。プロジェクトとは、REPL 上でソースファイルとコンパイラ設定を束ねる軽量な概念で、IDE（Eclipse や Visual Studio）上のプロジェクトに似ています。
 
-To build your current project, call ```(build)```. This will emit an executable or dynamic library depending on if you have defined a main-function or not. Please note that a project emitting a library will not initialize global variables automatically, the user of the library needs to call the C function `carp_init_globals` or the Carp function `System.carp-init-globals` instead.
+現在のプロジェクトをビルドするには `(build)` を実行します。メイン関数が定義されていれば実行ファイル、そうでなければ動的ライブラリが生成されます。ライブラリを生成した場合はグローバル変数の初期化が自動では行われないため、利用側が C 関数 `carp_init_globals` もしくは Carp 関数 `System.carp-init-globals` を呼び出してください。
 
-Everything emitted by the compiler will be saved in a directory named ```out``` by default. This, and other settings regarding the project can be changed by various commands. To see a list of available commands, call ```(help "project")```.
+生成物は既定で `out` ディレクトリに保存されます。このほか、プロジェクトに関する各種設定はコマンドで変更できます。利用可能なコマンドは `(help "project")` で確認してください。
 
-There are a bunch of handy shortcuts for doing common things at the REPL:
+REPL には代表的な操作用ショートカットが用意されています。
 
 ```
-:r   Reload all the files of the project
-:b   Build the project
-:x   Run the executable (if it exists)
-:c   Look at the emitted C code
-:e   Display the environment with all the function bindings and their types
-:p   Show project information and settings
-:h   Show the help screen
-:q   Quit the repl
+:r   プロジェクト内のすべてのファイルを再読み込み
+:b   プロジェクトをビルド
+:x   実行ファイルが存在する場合に実行
+:c   生成された C コードを表示
+:e   関数束縛と型情報を含む環境を表示
+:p   プロジェクト情報と設定を表示
+:h   ヘルプを表示
+:q   REPL を終了
 ```
 
-### Differences compared to REPL:s in other Lisp:s
+### 他の Lisp の REPL との違い
 
-While powerful, the REPL in Carp currently has some big limitations compared to most other Lisp:s. If you type in an expression and press enter one of the following things will happen:
+Carp の REPL は強力ですが、一般的な Lisp の REPL とは異なる制約があります。式を入力して Enter を押すと、次のいずれかが起こります。
 
-1. If you're calling a dynamic function (something defined with `defndynamic`, or a built in `command`) it will be executed right away. This works very much like a classic, dynamically typed Lisp interpreter. The dynamic functions are not available in compiled code! Their main usage is in macros and to programatically control your build settings.
+1. `defndynamic` で定義された関数（または組み込みコマンド）を呼び出した場合、その場で評価されます。これは伝統的な動的 Lisp のインタープリタに近い挙動です。動的関数はコンパイル済みコードでは利用できません。主な用途はマクロ内やビルド設定をプログラム的に制御する場面です。
 
-2. If you're calling a function defined with `defn` it's a "normal" Carp function which will be compiled (via C) to an executable binary, which is then run in a child process to the REPL. This means that the function has no chance to modify anything else in your program, like global variables and the like.
+2. `defn` で定義された関数を呼び出す場合は「通常の」 Carp 関数であり、C を経由してコンパイルされ、REPL の子プロセスとして実行されます。そのため、グローバル変数などプログラムの他の部分を変更することはできません。
 
-3. If the top-level form isn't a function call, the REPL might get confused. For example, entering an array of calls to a Carp function will give unexpected results (the array will be dynamic but the function calls will not). The easiest way to work around that at the moment is to wrap the expression in a `defn` and call that one instead. This will be fixed in a future version of Carp.
+3. トップレベルのフォームが関数呼び出しでない場合、REPL が混乱することがあります。たとえば Carp 関数の呼び出しを要素に持つ配列を入力すると、配列は動的に扱われますが関数呼び出しは評価されません。現時点での回避策は、`defn` で関数として包み、その関数を呼ぶことです。将来的には修正される予定です。
 
-### Adding annotations
+### アノテーションの追加
 
-Carp has a flexible metadata system (inspired by the one in Clojure) that lets anyone add and retrieve data on the bindings in the environment. The general way to do that is with `(meta-set! <path> <key> <value>)` and `(meta <path> <key>)`.
+Carp には Clojure に着想を得た柔軟なメタデータシステムがあり、環境中のバインディングに任意の情報を付与・取得できます。一般的な操作は `(meta-set! <path> <key> <value>)` と `(meta <path> <key>)` です。
 
-A couple of useful macros are implemented on top of this system:
+この仕組みの上にいくつか便利なマクロが実装されています。
 
 ```clojure
-(doc <path> "This is a nice function.") ; Documentation
-(sig <path> (Fn [Int] Bool))            ; Type annotation
-(private <path>)                        ; Will make the function inaccesible to other modules
+(doc <path> "This is a nice function.") ; ドキュメント文字列
+(sig <path> (Fn [Int] Bool))            ; 型注釈
+(private <path>)                        ; 他モジュールからアクセス不可にする
 ```
 
-Note that `<path>` in all these cases are symbols, e.g. `foo` or `Game.play`.
+ここで `<path>` は `foo` や `Game.play` のようなシンボルです。
 
-To generate html docs from the doc strings, run:
+ドキュメント文字列から HTML を生成するには次のコマンドを実行します。
 
 ```clojure
 (save-docs <module 1> <module 2> <etc>)
 ```
 
-### Getting types from bindings
+### バインディングの型を調べる
 
 ```clojure
 鲮 (type <binding>)
 鲮 :t <binding>
 ```
 
-### Listing bindings in a module
+### モジュール内のバインディング一覧
 
 ```clojure
 鲮 (info <module name>)
 鲮 :i <module name>
 ```
 
-### Expanding a macro
+### マクロの展開結果を確認する
 
 ```clojure
 鲮 (expand 'yourcode)
 鲮 :m yourcode
 ```
 
-### Configuring a project
+### プロジェクト設定
 
-The current session in the repl is called a "project" and can be configured using the `(Project.config <setting> <value>)` command. The following settings can be configured with this command:
+REPL での作業単位である「プロジェクト」は `(Project.config <setting> <value>)` で設定できます。主な設定項目は次の通りです。
 
-* ```"cflag"```              - Add a flag to the compiler.
-* ```"libflag"```            - Add a library flag to the compiler.
-* ```"pkgconfigflag"```      - Add a flag to pkg-config invocations.
-* ```"compiler"```           - Set what compiler should be run with the 'build' command.
-* ```"target"```             - Set the target triple (useful when cross-compiling).
-* ```"title"```              - Set the title of the current project, will affect the name of the binary produced.
-* ```"prompt"```             - Set the prompt in the repl.
-* ```"search-path"```        - Add a path where the Carp compiler will look for '*.carp' files.
-* ```"output-directory"```    - Where to put build artifacts.
-* ```"docs-directory"```      - Where to put generated docs.
-* ```"generate-only"```      - Set to true if you don't want to run the C compiler when building.
+* `"cflag"` — コンパイラに渡すフラグを追加
+* `"libflag"` — リンク時に渡すライブラリフラグを追加
+* `"pkgconfigflag"` — pkg-config 実行時に渡すフラグを追加
+* `"compiler"` — `build` 時に使用するコンパイラを指定
+* `"target"` — ターゲットトリプルを設定（クロスコンパイル向け）
+* `"title"` — プロジェクト名を設定。生成されるバイナリ名に影響
+* `"prompt"` — REPL のプロンプト文字列を設定
+* `"search-path"` — Carp が `.carp` ファイルを探すパスを追加
+* `"output-directory"` — ビルド生成物の出力先
+* `"docs-directory"` — 生成したドキュメントの出力先
+* `"generate-only"` — true にすると C コンパイラを呼ばず C コード生成のみを行う
 
-* ```"echo-c"```             - When a form is defined using 'def' or 'defn' its C code will be printed.
-* ```"echo-compiler-cmd"```  - When building the project the command for running the C compiler will be printed.
-* ```"print-ast"```          - The 'info' command will print the AST for a binding.
+* `"echo-c"` — `def` や `defn` の定義時に生成された C コードを表示
+* `"echo-compiler-cmd"` — ビルド時に実行するコンパイラコマンドを表示
+* `"print-ast"` — `info` コマンドで AST も表示
 
-For example, to set the title of your project:
+例: プロジェクトタイトルを設定する
 
 ```clojure
 鲮 (Project.config "title" "Fishy")
 ```
 
-To use another compiler:
+別のコンパイラを使う
 ```clojure
 鲮 (Project.config "compiler" "tcc")
 ```
 
-### Profile settings
+### プロファイル設定
 
-If a file called ```profile.carp``` is placed in the XDG config folder ```carp/```, that file will get loaded after the compiler has started (after loading the core libraries but before any other source files are loaded). This file is meant for user specific settings that you want in all your projects, like little helper functions and other customizations.
+XDG の設定ディレクトリ `carp/` に `profile.carp` を置くと、コンパイラ起動後（コアライブラリ読み込み後、他のソースを読む前）に自動でロードされます。これは全プロジェクトで共通して使いたい設定やヘルパ関数を記述するのに便利です。
 
-On Windows this file is located at ```C:/Users/USERNAME/AppData/Roaming/carp/profile.carp```.
+Windows では `C:/Users/USERNAME/AppData/Roaming/carp/profile.carp` に配置します。
 
-### Compiler flags
+### コンパイラフラグ
 
-When invoking the compiler from the command line you can supply the following flags to configure the behaviour:
+コマンドラインからコンパイラを呼び出す際は、以下のフラグで挙動を制御できます。
 
-* ```-b``` Build the code, then quit the compiler.
-* ```-x``` Build and run the code (make sure it has a main function defined), then quit the compiler.
-* ```--no-core``` Run the compiler without loading any of the core libraries.
-* ```--log-memory``` The executable will log all calls to malloc and free.
-* ```--optimize``` Removes safety checks (like array bounds access, etc.) and runs the C-compiler with the `-O3` flag.
-* ```--check``` Run the compiler without emitting any binary, just report all errors found (in a machine readable way).
-* ```--generate-only``` Don't compile the C source.
-* ```--eval-preload``` Evaluate the provided string before loading any code (but after loading ```profile.carp```).
+* `-b` — コードをビルドして終了
+* `-x` — コードをビルドして実行し（メイン関数が必要）、終了
+* `--no-core` — コアライブラリを読み込まずに実行
+* `--log-memory` — 実行ファイルが malloc/free の呼び出しをすべてログ出力
+* `--optimize` — 安全チェック（配列境界など）を無効化し、C コンパイラに `-O3` を付与
+* `--check` — バイナリを出力せず、検出したエラーを（機械可読な形で）報告
+* `--generate-only` — C ソースの生成のみに留め、コンパイルしない
+* `--eval-preload` — コード読み込み前（ただし `profile.carp` 読み込み後）に指定した文字列を評価
 
-### Inspecting the C code generated by an expression
+### 式から生成された C コードを確認する
 
 ```clojure
 鲮 (c '(+ 2 3))
 ```
 
-### Cross-compiling
+### クロスコンパイル
 
-Cross-compilation needs to be enabled early. You can do so in ```profile.carp``` as:
+クロスコンパイルは早い段階で有効化する必要があります。たとえば `profile.carp` に次を記述します。
 
 ```clojure
 (Project.config "compiler" "zig cc --target=x86_64-windows-gnu")
 (Project.config "target" "x86_64-windows-gnu")
 ```
 
-Or using ```--eval-preload``` as:
+または `--eval-preload` を使って次のように指定できます。
 
 ```sh
 carp --eval-preload '(Project.config "compiler" "zig cc --target=x86_64-windows-gnu") (Project.config "target" "x86_64-windows-gnu")' -b whatever.carp

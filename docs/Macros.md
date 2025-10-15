@@ -1,40 +1,21 @@
-# Macros
+# マクロ
 
-Macros are among the most divisive features about any Lisp. There are many
-different design decisions to be made, and all of them have proponents and
-detractors.
+マクロは Lisp 系言語の中でも賛否が大きく分かれる機能です。設計上の選択肢が多く、各アプローチに擁護者と反対者が存在します。
 
-This document aims to give a comprehensive overview of the macro system and how
-to use it. If you’re in a hurry or want to see whether Carp implements your
-favorite macro feature, you probably want to read the section [“In a
-Nutshell”](#in-a-nutshell). If you want to spend some quality time
-understanding how to work on or with the macro systems, the sections [“Working
-with Macros”](#working-with-macros) and [“Inner Workings”](#inner-workings)
-will probably be more useful to you.
+このドキュメントでは、Carp のマクロシステム全体とその使い方を解説します。急いでいる方や、お気に入りのマクロ機能が Carp にあるかどうかだけ知りたい方は、まず [「概要」](#概要) をご覧ください。マクロを実際に使いこなしたい、あるいは実装を理解したい場合は、[「マクロの使い方」](#マクロの使い方) と [「内部構造」](#内部構造) が役に立つでしょう。
 
-## In a Nutshell
+## 概要
 
-The macro system we’ve settled on for Carp is fairly simple. It is:
+Carp のマクロシステムは比較的シンプルで、以下の特徴を持ちます。
 
-- not hygienic, but provides `gensym` capabilities,
-- does not currently provide quasiquoting (this is not a requirement, it is
-  currently just not implemented); thus the bread and butter in your macro
-  toolbox will be `car`, `cdr`, `cons`, and `list`,
-- defines macros with a fairly simple `defmacro`-based syntax, and has support
-  for compile-time or dynamic functions (for more information on this aspect,
-  please read [“Working with Macros”](#working-with-macros) below), and
-- it sees the dynamic environment not just as an environment in which to
-  generate code through expanding macros, but also as a place for telling the
-  compiler more about the source. As an example, consider the dynamic function
-  `Project.config`, which allows you to set such things as the C compiler to
-  use, the name of the compiled project, or the output directory. To see this
-  in action, consider [this Carp snippet](https://github.com/carpentry-org/snippets/blob/master/build_system.carp)
-  which implements a simple multi-compiler build system for Carp in the dynamic
-  environment.
+- 衛生的（hygienic）ではありませんが、`gensym` を利用できます。
+- 準クォートは現時点で未実装です（構想がないわけではなく、単にまだ導入されていません）。そのためマクロの基本ツールは `car`、`cdr`、`cons`、`list` になります。
+- `defmacro` ベースの分かりやすい構文でマクロを定義でき、コンパイル時／動的関数を併用できます（詳しくは[「マクロの使い方」](#マクロの使い方) を参照）。
+- 動的環境はマクロを展開してコードを生成する場であると同時に、コンパイルに関する追加情報を伝える場としても活用されます。例として、`Project.config` という動的関数を使うと C コンパイラやプロジェクト名、出力ディレクトリなどを設定できます。実際の例として、動的環境で複数コンパイラに対応したビルドシステムを実装している[コードスニペット](https://github.com/carpentry-org/snippets/blob/master/build_system.carp)があります。
 
-## Working with Macros
+## マクロの使い方
 
-Macros are defined using the `defmacro` primitive form, like this:
+マクロは `defmacro` プリミティブで定義します。
 
 ```clojure
 (defmacro apply [f args] (cons f args))
@@ -43,16 +24,9 @@ Macros are defined using the `defmacro` primitive form, like this:
 (apply Array.replicate (5 "hello")) ; => (Array.replicate 5 "hello")
 ```
 
-The example above defines `apply`, a macro that takes a function and a set of
-arguments defined as a list and rewrites it so that the function gets applied
-to these arguments by `cons`tructing a list with `f` as a head and `args` as
-tail.
+上の例では、関数とリストで表現された引数を受け取り、それらを `cons` で結合して関数適用の形に書き換える `apply` マクロを定義しています。
 
-Because `apply` is a macro you will not need to quote the list passed to it. If
-that looks strange, you might want to define `apply` as a dynamic function
-instead. The main difference between macros and dynamic functions is that
-dynamic functions evaluate their arguments and macros are expanded inside their
-definitions. You may define a dynamic function like this:
+マクロである `apply` に渡すリストはクォート不要です。それが気になるなら、代わりに動的関数として定義することもできます。動的関数は引数を評価する一方、マクロは本体で展開される点が異なります。動的関数は次のように定義します。
 
 ```clojure
 (defndynamic apply [f args] (cons f args))
@@ -61,12 +35,9 @@ definitions. You may define a dynamic function like this:
 (apply 'Array.replicate '(5 "hello")) ; => (Array.replicate 5 "hello")
 ```
 
-If you compare this code example to the macro example above, you’ll see that
-they are extremely similar, except for the invocation `defndynamic` and the
-quotes in their invocation.
+マクロ版と比べると、`defndynamic` を使っていることと、呼び出し側で引数にクォートを付けている以外はほとんど同じです。
 
-Macros also provide rest arguments; this basically means that you may define
-variadic macros by providing a “catch-all” argument as the last argument.
+マクロでは可変長引数を扱うために「残り引数」を受け取れます。最後の引数名の前に `:rest` を付けると、その位置以降の引数をリストとして受け取ります。
 
 ```clojure
 (defmacro apply-or-sym [head :rest tail]
@@ -78,138 +49,71 @@ variadic macros by providing a “catch-all” argument as the last argument.
 (apply-or-sym + 1 2) ; => (+ 1 2)
 ```
 
-The macro `apply-or-sym` is slightly ridiculous, but it should drive the point
-home. It takes one formal argument, `head`. You may provide any number of
-arguments after that—they will be bound to `tail`. Thus, tail will be a list of
-zero or more arguments. If we do not provide any, `apply-or-sym` will just
-return `head`. If we do, we treat it as a regular invocation. This kind of
-macro might look slightly silly, but rest assured that using rest arguments has
-many legitimate use cases.
+`apply-or-sym` は少々ふざけた例ですが、仕組みを理解するには分かりやすいでしょう。形式引数 `head` の後に任意個の引数を渡すと、それらは `tail` というリストに束縛されます。引数が 1 つだけなら `head` をそのまま返し、複数あるなら通常の関数呼び出しと同じように扱います。実際にはもっと有用な用途があり、残り引数はたくさんのケースで活躍します。
 
-If you’d like to see more examples of macros big and small, you should now be
-equipped to understand a lot of the macros in [the standard
-library](/core/Macros.carp) and even [`fmt`](/core/Format.carp), a fairly
-complex piece of macro machinery.
+マクロの実例をさらに見たい場合は、[標準ライブラリのマクロ定義](../core/Macros.carp)や、比較的大規模なマクロである [`fmt`](../core/Format.carp) を参照すると良いでしょう。
 
-Some helpful functions for exploring macros in the REPL are `expand`, `eval`,
-and `macro-log`. `expand` will expand macros for you, while `eval` evaluates
-the resulting code. `macro-log` is useful for tracing your macro, a form of
-“printf debugging”.
+REPL でマクロを調べる際に便利な関数として `expand`、`eval`、`macro-log` があります。`expand` はマクロを展開し、`eval` は展開後のコードを評価します。`macro-log` はマクロ内部の動作を追跡する際に役立つ“printf デバッグ”的なツールです。
 
-## Inner Workings
+## 内部構造
 
-The Carp compiler is split in a few different stages. The diagram below
-illustrates the flow of the compiler.
+Carp コンパイラはいくつかの段階に分かれています。以下の図はコンパイラの処理フローを示したものです。
 
 ![The compiler passes](./compiler-passes.svg)
 
-The dynamic evaluator is arguably one of the most central pieces of the Carp
-compiler. It orchestrates macro expansion, borrow checking, and type inference,
-as it encounters forms that have requirements for these services, such as
-function definitions, variables, or `let` bindings.
+動的評価器は Carp コンパイラで最も重要な要素のひとつで、マクロ展開・借用チェック・型推論などを指揮します。関数定義や変数、`let` 束縛など、これらの処理を必要とするフォームに出会うたびに対応します。
 
-Therefore, understanding the evaluator will give you a lot of insight into how
-Carp works generally.
+したがって、評価器の仕組みを理解すれば Carp 全体の動きを把握しやすくなります。動的評価器を学ぶ際の出発点としては、[`src/Eval.hs`](../src/Eval.hs) にある `eval` 関数が最適です。
 
-The most tried-and-true starting point for understanding the dynamic evaluator
-is `eval` in [`src/Eval.hs`](/src/Eval.hs).
+### データ構造
 
-### Data Structures
-
-The type signature of `eval` is as follows:
+`eval` の型シグネチャは次のとおりです。
 
 ```haskell
 eval :: Context -> XObj -> IO (Context, Either EvalError XObj)
 ```
 
-Thus, to understand it, we’ll have to understand at least `Context`, `XObj`,
-and `EvalError`. The types `IO` and `Either` are part of the Haskell standard
-library and will not be covered extensively—please refer to your favorite
-tool for Haskell documentation (we recommend [Stackage](https://stackage.org))
-to find out more about them.
+この関数を理解するには、最低限 `Context`、`XObj`、`EvalError` を把握する必要があります。`IO` と `Either` は Haskell 標準ライブラリの型なので詳細説明は割愛します（[Stackage](https://stackage.org) などのドキュメントを参照してください）。
 
-All data structures that are discussed here are defined in
-[`src/Obj.hs`](/src/Obj.hs).
+以下で解説するデータ構造はすべて [`src/Obj.hs`](../src/Obj.hs) に定義されています。
 
 #### `XObj`
 
-`XObj` is short for “`Obj` with eXtras”. `Obj` is the type for AST nodes in
-Carp, and it’s used throughout the compiler. Most often, you’ll find it wrapped
-in an `XObj`, though, which annotates such an `Obj` with an optional source
-location information—in the field `info`, modelled as a `Maybe Info`—and
-type information—in the field `ty`, modelled as a `Maybe Ty`. While both of
-these fields are important, for the purposes of this document we will overlook
-them and treat a `XObj` as an ordinary AST node. Thus, `eval` becomes a
-function that takes a context and an AST node, and returns a pair consisting of
-a new context, and either an `EvalError` or a new AST node.
+`XObj` は “`Obj` with eXtras” の略です。`Obj` は Carp の AST ノードを表す型で、コンパイラ全体で使用されます。多くの場合、`Obj` は `XObj` に包まれており、`XObj` は追加情報を付与します。具体的には、`info` フィールド（`Maybe Info`）がソースコード上の位置などを保持し、`ty` フィールド（`Maybe Ty`）が型情報を保持します。本ドキュメントでは話を簡単にするため、これらを省略し、`XObj` は単なる AST ノードだと考えます。そうすると、`eval` は「コンテキストと AST ノードを受け取り、新しいコンテキストとエラーもしくは新しい AST ノードを返す関数」と捉えられます。
 
 #### `Context`
 
-`Context` is a data structure that holds all of the state of the Carp compiler.
-It is fairly extensive, holding information ranging from the type and value
-environments to the history of evaluation frames that were traversed for
-tracebacks.
-
-The entire state of the compiler should be inspectable by inspecting its
-context.
+`Context` は Carp コンパイラ全体の状態を保持するデータ構造です。型・値環境から、スタックトレース用に辿った評価フレームの履歴まで、多くの情報を含みます。コンパイラの状態を知りたい場合はコンテキストを調べればわかります。
 
 #### `EvalError`
 
-An `EvalError` is emitted whenever the dynamic evaluator encounters an error.
-It consists of an error message and meta information (such as a traceback and
-source location information).
+動的評価器がエラーに遭遇すると `EvalError` が生成されます。エラーメッセージに加え、トレースバックやソース位置などのメタ情報を含みます。
 
-### Evaluation
+### 評価
 
-The dynamic evaluator in Carp takes care both of evaluation and meta-level
-information like definitions. This means that definitions are treated much like
-dynamic primitives to evaluate rather than special constructs. In fact, many of
-them are not treated as special forms, but are implemented as `Primitive`s.
+Carp の動的評価器は、式の評価に加えて定義などのメタレベル情報も扱います。つまり、定義は特別な構文ではなく、評価すべき動的プリミティブとして扱われます。多くの定義関連フォームは特殊フォームではなく、Haskell で実装された `Primitive` として提供されています。
 
-Because we already introduced multiple constructs by name, let us define what
-kinds of Carp constructs there are for the evaluator:
+ここで、評価器が扱う構文の種類を整理しておきます。
 
-- Special forms: these are forms that have their own representation in the
-  abstract syntax tree and are treated directly in the evaluator loop. `fn` and
-  `the` are examples for this category. They cannot be passed around by value,
-  as you would do in higher order functions.
-- Primitives: these are regular Carp forms that do not evaluate their
-  arguments, and they resemble builtin macros implemented in Haskell. Examples
-  for this category include `defmacro`, `defn`, and `quote`.
-- Commands: these, too, are regular Carp forms. They evaluate their arguments
-  and behave like builtin functions. Examples for this category include
-  `Project.config`, `car`, and `cons`.
+- **特殊フォーム**: 抽象構文木上に専用のノードを持ち、評価ループ内で直接扱われる構文です。`fn` や `the` が該当します。高階関数のように値として受け渡すことはできません。
+- **プリミティブ**: 引数を評価しない通常の Carp フォームで、Haskell で実装された組み込みマクロに相当します。`defmacro`、`defn`、`quote` などが該当します。
+- **コマンド**: こちらも通常の Carp フォームですが、引数を評価し、組み込み関数として振る舞います。`Project.config`、`car`、`cons` などです。
 
-Primitives are mostly defined in [`src/Primitives.hs`](/src/Primitives.hs),
-commands can be found in [`src/Commands.hs`](/src/Commands.hs), and special
-forms can be found directly inside `eval`.
+プリミティブは主に [`src/Primitives.hs`](../src/Primitives.hs)、コマンドは [`src/Commands.hs`](../src/Commands.hs)、特殊フォームは `eval` 関数内にあります。これらは [`src/StartingEnv.hs`](../src/StartingEnv.hs) で環境に登録され、名前が与えられます。
 
-They are wired up into the environment and given names in
-[`src/StartingEnv.hs`](/src/StartingEnv.hs).
+#### 特殊フォーム／プリミティブ／コマンドを追加するには
 
-#### Adding your own special forms, primitives, or commands
+Carp の評価器に新しいプリミティブやコマンドを追加するには多くの仕組みがありますが、開始を助ける便利な関数も用意されています。既存のランタイム関数と同じ名前を使用する場合は、可能な限りその挙動を再現するようにしてください。
 
-While there is a lot of machinery involved in getting your own primitives or
-commands into the Carp evaluator, there are a lot of simple functions around to
-help you get started.
+特殊フォームを追加するのはやや大掛かりで、`eval` の理解や保守を難しくしないよう慎重に判断しています。新しい特殊フォームを検討する際は、まず[チャット](https://gitter.im/carp-lang/carp) で相談することをおすすめします。
 
-If the name for the primitive or command is already present as a runtime
-function, it should try to mimic its behavior as closely as possible.
+#### 現在存在する特殊フォーム一覧
 
-Adding special forms is a little more involved and we try to exercise caution
-in what to add, since every form makes `eval` harder to understand and reason
-about. You should probably get in touch [on the
-chat](https://gitter.im/carp-lang/carp) before embarking on a quest to
-implement a new special form to avoid frustration.
+特殊フォームは“魔法のような存在”なので列挙しておきます。現在のところ以下が定義されています。
 
-#### A current list of special forms
-
-Since special forms are “magical”, they deserve an enumeration. Currently there
-are:
-
-- `if` for branching,
-- `defn` for defining functions,
-- `def` for defining global variables,
-- `let` for defining local variables,
-- `the` for type annotations,
-- `fn` for function literals.
+- `if` — 分岐
+- `defn` — 関数定義
+- `def` — グローバル変数定義
+- `let` — ローカル変数束縛
+- `the` — 型注釈
+- `fn` — 関数リテラル
